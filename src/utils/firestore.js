@@ -240,6 +240,16 @@ export async function deleteDocument(uid, colName, docId) {
   await deleteDoc(doc(db, 'users', uid, colName, docId))
 }
 
+// ── 키움 API 키 저장/조회 (Firestore, 본인만 read 가능하도록 보안규칙 필요) ──
+export async function saveKiwoomKeys(uid, keys) {
+  await setDoc(doc(db, 'users', uid, 'settings', 'kiwoomKeys'), keys, { merge: true })
+}
+
+export async function getKiwoomKeys(uid) {
+  const snap = await getDoc(doc(db, 'users', uid, 'settings', 'kiwoomKeys'))
+  return snap.exists() ? snap.data() : null
+}
+
 // ── 리밸런싱 리포트 기본값 저장/조회 ────────────────────────
 export async function getRebalanceSettings(uid) {
   const snap = await getDoc(doc(db, 'users', uid, 'settings', 'rebalance'))

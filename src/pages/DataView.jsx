@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx'
 import { useAuth } from '../contexts/AuthContext'
 import {
   getAllHoldings, getAllCash, getAllSnapshots,
-  deleteDocument, deleteDateData, deleteCollectionData, countCollection,
+  deleteDateData, deleteCollectionData, countCollection,
 } from '../utils/firestore'
 
 const TABS = ['보유종목', '예수금', '스냅샷']
@@ -105,9 +105,15 @@ function HoldingsTab() {
 
   const handleDelete = async () => {
     setDeleting(true)
-    if (modal.type === 'row') await deleteDocument(user.uid, 'holdings', modal.docId)
-    else if (modal.type === 'date') await deleteDateData(user.uid, 'holdings', modal.date)
-    else await deleteCollectionData(user.uid, 'holdings')
+    if (modal.type === 'date') {
+      await deleteDateData(user.uid, 'holdings', modal.date)
+      await deleteDateData(user.uid, 'cash', modal.date)
+      await deleteDateData(user.uid, 'snapshots', modal.date)
+    } else {
+      await deleteCollectionData(user.uid, 'holdings')
+      await deleteCollectionData(user.uid, 'cash')
+      await deleteCollectionData(user.uid, 'snapshots')
+    }
     setModal(null)
     await load()
     setDeleting(false)
@@ -181,7 +187,6 @@ function HoldingsTab() {
               <th style={styles.th}>평가금액</th>
               <th style={styles.th}>평가손익</th>
               <th style={styles.th}>수익률</th>
-              <th style={styles.th}></th>
             </tr>
           </thead>
           <tbody>
@@ -195,9 +200,6 @@ function HoldingsTab() {
                 <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.evalAmt)}</td>
                 <td style={{ ...styles.td, textAlign: 'right', color: row.gainLoss >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.gainLoss)}</td>
                 <td style={{ ...styles.td, textAlign: 'right', color: row.returnRate >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.returnRate).toFixed(2)}%</td>
-                <td style={styles.td}>
-                  <button style={styles.rowDel} onClick={() => setModal({ type: 'row', docId: row.docId, count: 1 })}>삭제</button>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -206,7 +208,7 @@ function HoldingsTab() {
 
       {modal && (
         <DeleteModal
-          title={modal.type === 'row' ? '종목 삭제' : modal.type === 'date' ? `${modal.date} 전체 삭제` : '보유종목 전체 삭제'}
+          title={modal.type === 'date' ? `${modal.date} 전체 삭제` : '보유종목 전체 삭제'}
           requireConfirm={modal.type === 'all'}
           count={modal.count}
           onConfirm={handleDelete}
@@ -224,8 +226,6 @@ function CashTab() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState('')
-  const [modal, setModal] = useState(null)
-  const [deleting, setDeleting] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -240,16 +240,6 @@ function CashTab() {
   const dates = [...new Set(data.map(d => d.date))].sort().reverse()
   const filtered = data.filter(d => d.date === selectedDate)
 
-  const handleDelete = async () => {
-    setDeleting(true)
-    if (modal.type === 'row') await deleteDocument(user.uid, 'cash', modal.docId)
-    else if (modal.type === 'date') await deleteDateData(user.uid, 'cash', modal.date)
-    else await deleteCollectionData(user.uid, 'cash')
-    setModal(null)
-    await load()
-    setDeleting(false)
-  }
-
   if (loading) return <div style={styles.loading}>로딩 중...</div>
   if (!data.length) return <div style={styles.empty}>저장된 예수금 데이터가 없습니다.</div>
 
@@ -260,14 +250,6 @@ function CashTab() {
           <span style={styles.toolLabel}>날짜 선택</span>
           <DateSelect id="cash-dates" dates={dates} value={selectedDate} onChange={setSelectedDate} />
         </div>
-        <div style={styles.toolRight}>
-          <button style={styles.dateDel} onClick={() => setModal({ type: 'date', date: selectedDate, count: filtered.length })}>
-            {selectedDate} 삭제
-          </button>
-          <button style={styles.allDel} onClick={() => setModal({ type: 'all', count: data.length })}>
-            전체 삭제
-          </button>
-        </div>
       </div>
 
       <div style={styles.tableWrap}>
@@ -276,7 +258,6 @@ function CashTab() {
             <tr>
               <th style={styles.th}>계좌</th>
               <th style={styles.th}>D+2 예수금</th>
-              <th style={styles.th}></th>
             </tr>
           </thead>
           <tbody>
@@ -284,25 +265,11 @@ function CashTab() {
               <tr key={row.docId} style={styles.tr}>
                 <td style={styles.td}>{row.accountId}</td>
                 <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.amount)}원</td>
-                <td style={styles.td}>
-                  <button style={styles.rowDel} onClick={() => setModal({ type: 'row', docId: row.docId, count: 1 })}>삭제</button>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      {modal && (
-        <DeleteModal
-          title={modal.type === 'row' ? '예수금 삭제' : modal.type === 'date' ? `${modal.date} 전체 삭제` : '예수금 전체 삭제'}
-          count={modal.count}
-          requireConfirm={modal.type === 'all'}
-          onConfirm={handleDelete}
-          onCancel={() => setModal(null)}
-          loading={deleting}
-        />
-      )}
     </div>
   )
 }
@@ -313,9 +280,6 @@ function SnapshotsTab() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [modal, setModal] = useState(null)
-  const [deleting, setDeleting] = useState(false)
-
   const load = async () => {
     setLoading(true)
     setLoadError('')
@@ -332,29 +296,12 @@ function SnapshotsTab() {
 
   const sorted = [...data].sort((a, b) => b.date.localeCompare(a.date))
 
-  const handleDelete = async () => {
-    setDeleting(true)
-    if (modal.type === 'row') await deleteDocument(user.uid, 'snapshots', modal.docId)
-    else await deleteCollectionData(user.uid, 'snapshots')
-    setModal(null)
-    await load()
-    setDeleting(false)
-  }
-
   if (loading) return <div style={styles.loading}>로딩 중...</div>
   if (loadError) return <div style={{ color: '#f87171', padding: 20, fontSize: 13 }}>{loadError}<br /><button style={{ marginTop: 10, ...styles.rowDel }} onClick={load}>재시도</button></div>
   if (!data.length) return <div style={styles.empty}>저장된 스냅샷이 없습니다.</div>
 
   return (
     <div>
-      <div style={styles.toolbar}>
-        <div style={styles.toolRight}>
-          <button style={styles.allDel} onClick={() => setModal({ type: 'all', count: data.length })}>
-            전체 삭제
-          </button>
-        </div>
-      </div>
-
       <div style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>
@@ -371,7 +318,6 @@ function SnapshotsTab() {
               <th style={styles.th}>증가율</th>
               <th style={styles.th}>대출금</th>
               <th style={styles.th}>순자산</th>
-              <th style={styles.th}></th>
             </tr>
           </thead>
           <tbody>
@@ -389,25 +335,11 @@ function SnapshotsTab() {
                 <td style={{ ...styles.td, textAlign: 'right', color: (row.totalChangeRate ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.totalChangeRate ?? 0).toFixed(2)}%</td>
                 <td style={{ ...styles.td, textAlign: 'right', color: '#f87171' }}>{row.totalLoan > 0 ? fmt(row.totalLoan) : '-'}</td>
                 <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600, color: '#a78bfa' }}>{fmt(row.netBalance ?? row.totalBalance)}</td>
-                <td style={styles.td}>
-                  <button style={styles.rowDel} onClick={() => setModal({ type: 'row', docId: row.docId, count: 1 })}>삭제</button>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      {modal && (
-        <DeleteModal
-          title={modal.type === 'row' ? '스냅샷 삭제' : '스냅샷 전체 삭제'}
-          count={modal.count}
-          requireConfirm={modal.type === 'all'}
-          onConfirm={handleDelete}
-          onCancel={() => setModal(null)}
-          loading={deleting}
-        />
-      )}
     </div>
   )
 }

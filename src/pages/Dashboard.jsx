@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
 import { getLatestHoldings, getLatestCash, getAccounts, getSnapshots, getSectors, getRebalanceSettings } from '../utils/firestore'
@@ -509,8 +509,8 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {sectorGroups.map(g => (
-                  <>
-                    <tr key={`sec-${g.sector}`} className="sector-row">
+                  <Fragment key={g.sector}>
+                    <tr className="sector-row">
                       <td colSpan={2} className="bold">{g.sector}</td>
                       <td className="r bold">{fmtWon(g.evalAmt)}</td>
                       <td className="r bold">{(g.evalAmt / totalBal * 100).toFixed(1)}%</td>
@@ -533,7 +533,7 @@ export default function Dashboard() {
                         </tr>
                       )
                     })}
-                  </>
+                  </Fragment>
                 ))}
                 <tr className="total-row">
                   <td className="bold dim" colSpan={2}>합계 (주식)</td>

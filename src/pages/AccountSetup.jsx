@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useAccounts } from '../hooks/useAccounts'
-import { getLoans, saveLoan, deleteLoan } from '../utils/firestore'
+import { getLoans, saveLoan, deleteLoan, getKiwoomKeys, saveKiwoomKeys } from '../utils/firestore'
+import { clearKiwoomKeysCache } from '../utils/kiwoomApi'
 
 const INITIAL_ACCOUNTS = [
   { accountId: '010-9786-1102-1', broker: 'mirae', category: 'pension',  name: '미래에셋 연금저축', type: 'stock' },
@@ -29,9 +30,35 @@ export default function AccountSetup() {
   const [editingLoan, setEditingLoan] = useState(null) // { id, name, amount }
   const [loanSaving, setLoanSaving] = useState(false)
 
+  // 키움 API 키
+  const [kiwoomStatus, setKiwoomStatus] = useState({ kr: false, us: false })
+  const [kiwoomForm, setKiwoomForm] = useState({ kr_appkey: '', kr_secretkey: '', us_appkey: '', us_secretkey: '' })
+  const [kiwoomSaving, setKiwoomSaving] = useState(false)
+
+  const loadKiwoomStatus = () => {
+    getKiwoomKeys(user.uid).then(data => {
+      setKiwoomStatus({
+        kr: !!(data?.kr_appkey && data?.kr_secretkey),
+        us: !!(data?.us_appkey && data?.us_secretkey),
+      })
+    })
+  }
+
   useEffect(() => {
-    if (user) getLoans(user.uid).then(setLoans)
+    if (user) { getLoans(user.uid).then(setLoans); loadKiwoomStatus() }
   }, [user])
+
+  const handleSaveKiwoom = async (e) => {
+    e.preventDefault()
+    const filled = Object.fromEntries(Object.entries(kiwoomForm).filter(([, v]) => v.trim()))
+    if (!Object.keys(filled).length) return
+    setKiwoomSaving(true)
+    await saveKiwoomKeys(user.uid, filled)
+    clearKiwoomKeysCache()
+    setKiwoomForm({ kr_appkey: '', kr_secretkey: '', us_appkey: '', us_secretkey: '' })
+    loadKiwoomStatus()
+    setKiwoomSaving(false)
+  }
 
   const handleAddLoan = async (e) => {
     e.preventDefault()
@@ -299,6 +326,26 @@ export default function AccountSetup() {
           />
           <button style={styles.addBtn} type="submit" disabled={loanSaving}>
             {loanSaving ? '저장 중...' : '추가'}
+          </button>
+        </form>
+      </div>
+
+      {/* 키움 API 키 */}
+      <div style={styles.loanBox}>
+        <h3 style={styles.formTitle}>키움 API 키</h3>
+        <p style={styles.loanDesc}>
+          국내: {kiwoomStatus.kr ? <span style={{ color: '#4ade80' }}>등록됨</span> : <span style={{ color: '#f87171' }}>미등록</span>}
+          {'  ·  '}
+          해외: {kiwoomStatus.us ? <span style={{ color: '#4ade80' }}>등록됨</span> : <span style={{ color: '#f87171' }}>미등록</span>}
+          <br />저장 후에는 값이 표시되지 않습니다. 변경하려면 새 값을 입력 후 저장하세요.
+        </p>
+        <form onSubmit={handleSaveKiwoom} style={styles.form}>
+          <input style={styles.input} placeholder="국내 appkey" type="password" value={kiwoomForm.kr_appkey} onChange={e => setKiwoomForm(f => ({ ...f, kr_appkey: e.target.value }))} />
+          <input style={styles.input} placeholder="국내 secretkey" type="password" value={kiwoomForm.kr_secretkey} onChange={e => setKiwoomForm(f => ({ ...f, kr_secretkey: e.target.value }))} />
+          <input style={styles.input} placeholder="해외 appkey" type="password" value={kiwoomForm.us_appkey} onChange={e => setKiwoomForm(f => ({ ...f, us_appkey: e.target.value }))} />
+          <input style={styles.input} placeholder="해외 secretkey" type="password" value={kiwoomForm.us_secretkey} onChange={e => setKiwoomForm(f => ({ ...f, us_secretkey: e.target.value }))} />
+          <button style={styles.addBtn} type="submit" disabled={kiwoomSaving}>
+            {kiwoomSaving ? '저장 중...' : '저장'}
           </button>
         </form>
       </div>

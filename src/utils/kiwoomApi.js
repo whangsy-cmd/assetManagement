@@ -1,11 +1,31 @@
 // 키움 REST API — 브라우저에서 api.kiwoom.com 직접 호출
 // CORS가 차단되면 브라우저 콘솔에 CORS 오류가 표시됩니다
+// appkey/secretkey는 빌드에 포함되면 배포된 정적 파일에서 그대로 추출 가능하므로
+// Firestore(본인 uid 경로, 보안규칙으로 보호)에서 런타임에 읽어온다.
+
+import { getKiwoomKeys } from './firestore'
 
 const KIWOOM_BASE = 'https://api.kiwoom.com'
 
-const KEYS = {
-  kr: { appkey: import.meta.env.VITE_KIWOOM_KR_APPKEY, secretkey: import.meta.env.VITE_KIWOOM_KR_SECRETKEY },
-  us: { appkey: import.meta.env.VITE_KIWOOM_US_APPKEY, secretkey: import.meta.env.VITE_KIWOOM_US_SECRETKEY },
+let _uid = null
+let _keysCache = null
+
+export function setKiwoomAuthUid(uid) {
+  if (uid !== _uid) _keysCache = null
+  _uid = uid
+}
+
+export function clearKiwoomKeysCache() {
+  _keysCache = null
+}
+
+async function loadKeys() {
+  if (_keysCache) return _keysCache
+  if (!_uid) throw new Error('로그인이 필요합니다.')
+  const data = await getKiwoomKeys(_uid)
+  if (!data) throw new Error('키움 API 키가 설정되지 않았습니다. 계좌 관리에서 등록하세요.')
+  _keysCache = data
+  return _keysCache
 }
 
 const _tokens = { kr: null, us: null }
@@ -13,7 +33,10 @@ const _expiry = { kr: 0,    us: 0    }
 
 async function getToken(kind) {
   if (_tokens[kind] && Date.now() < _expiry[kind]) return _tokens[kind]
-  const { appkey, secretkey } = KEYS[kind]
+  const keys = await loadKeys()
+  const appkey = keys[`${kind}_appkey`]
+  const secretkey = keys[`${kind}_secretkey`]
+  if (!appkey || !secretkey) throw new Error(`키움 ${kind === 'kr' ? '국내' : '해외'} API 키가 설정되지 않았습니다.`)
   const res = await fetch(`${KIWOOM_BASE}/oauth2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json;charset=UTF-8' },
