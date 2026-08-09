@@ -208,7 +208,7 @@ export default function Dashboard() {
   const netDenom  = latest.netBalance || sectorStockTotal || 1
   const sectorData = Object.entries(sectorAgg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
   const categoryData = [
-    { name: '국내', value: domestic },
+    { name: '국내', value: domestic - (latest.totalLoan || 0) },
     { name: '해외', value: overseas },
     { name: '연금', value: pension },
     ...(latest.totalLoan > 0 ? [{ name: '대출금', value: latest.totalLoan }] : []),

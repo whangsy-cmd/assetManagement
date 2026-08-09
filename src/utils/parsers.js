@@ -112,6 +112,228 @@ export function parseKiwoomKrCash(text) {
   return 0
 }
 
+// 거래번호 없는 수기 붙여넣기 포맷 공용 — 날짜+시간만으론 동시각 복수건이 충돌할 수 있어 적요/금액도 섞음
+function makeTradeNo(dateRaw, time, memo, amount) {
+  return `${dateRaw.replace(/\//g, '')}${time.replace(/:/g, '')}_${memo}_${amount}`
+}
+
+// 키움 입출금내역 계열 공용 파서 — 헤더 라벨로 컬럼 위치 찾아 레코드당 1줄씩 읽음
+// 통화 컬럼이 KRW면 원화 금액/잔고 컬럼, 그 외(USD 등)면 외화 금액/잔고 컬럼이 실제 값 (세금 등 이미 반영된 순액 기준)
+function parseKiwoomCashFlowLines(text, cfg) {
+  const lines = text.trim().split('\n').map(l => l.split('\t'))
+  const headerA = lines.findIndex(c => c[0]?.trim() === cfg.dateCol)
+  if (headerA === -1) return []
+
+  const norm = s => (s ?? '').replace(/^'/, '').trim()
+  const idx = name => lines[headerA].findIndex(c => norm(c) === name)
+
+  const cDate = idx(cfg.dateCol), cRmrk = idx(cfg.rmrkCol), cCrnc = idx(cfg.crncCol),
+        cAmt = idx(cfg.amtCol), cFcAmt = idx(cfg.fcAmtCol),
+        cBal = idx(cfg.balCol), cFcBal = idx(cfg.fcBalCol), cTime = idx(cfg.timeCol),
+        cDealTp = cfg.dealTpCol ? idx(cfg.dealTpCol) : -1,
+        cRate = cfg.rateCol ? idx(cfg.rateCol) : -1
+
+  const result = []
+  for (let i = headerA + 1; i < lines.length; i++) {
+    const cols = lines[i]
+    const dateRaw = cols[cDate]?.trim()
+    if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateRaw || '')) continue
+    if (cDealTp !== -1 && cols[cDealTp]?.trim() !== '입출금') continue // 매매/환전 등 입출금 아닌 거래 제외
+    const rmrk = cols[cRmrk]?.trim()
+    if (!rmrk) continue
+    if (cfg.excludeRmrk?.some(s => rmrk.includes(s))) continue // 결제차금/수수료 등 실제 입출금 아닌 정산 항목 제외
+    const crnc = cols[cCrnc]?.trim() || 'USD'
+    const isKrw = crnc === 'KRW'
+    const time = cols[cTime]?.trim() || ''
+    const amount = cleanNumber(isKrw ? cols[cAmt] : cols[cFcAmt])
+    if (!amount) continue
+    const row = {
+      date: dateRaw.replace(/\//g, '-'),
+      tradeNo: makeTradeNo(dateRaw, time, rmrk, amount),
+      memo: rmrk,
+      ioType: rmrk.endsWith('출금') ? '출금' : '입금',
+      amount,
+      balance: cleanNumber(isKrw ? cols[cBal] : cols[cFcBal]),
+      currency: crnc,
+      time,
+    }
+    if (cRate !== -1) {
+      const rate = cleanNumber(cols[cRate])
+      if (rate) row.rate = rate // 거래 시점 원화환산 환율 (있을 때만 저장 — Firestore는 undefined 거부)
+    }
+    result.push(row)
+  }
+  return result
+}
+
+// ── 포맷 7: 키움 해외 입출금내역 (붙여넣기, 레코드당 1줄) ──
+// 컬럼: 거래일자 · 적요명 · 통화 · 정산금액(원화) · 정산금액(외)(외화) · 예수금잔고 · 외화예수금잔고 · 처리시간 등
+export const parseKiwoomUsCashFlows = text => parseKiwoomCashFlowLines(text, {
+  dateCol: '거래일자', rmrkCol: '적요명', crncCol: '통화',
+  amtCol: '정산금액', fcAmtCol: '정산금액(외)', balCol: '예수금잔고', fcBalCol: '외화예수금잔고', timeCol: '처리시간',
+  dealTpCol: '거래종류',
+})
+
+// ── 포맷 8: 키움 국내 선물옵션 입출금내역 (붙여넣기, 레코드당 1줄) ──
+// 컬럼: 일자 · 입금액(현금/수표/대용환전/대용매도) · 출금액 · 결제내역(선물차금/옵션차금/실물인수도결제대금/수수료) · 입금액대비차액
+// 실제 입출금은 "현금"(입금액 첫 서브컬럼) · "출금액" 두 컬럼뿐 — 결제내역·차액은 참고용 정산 정보라 금액 판정에 안 씀
+export function parseKiwoomKrFuturesCashFlows(text) {
+  const lines = text.trim().split('\n').map(l => l.split('\t'))
+  const headerA = lines.findIndex(c => c[0]?.trim() === '일자')
+  if (headerA === -1 || headerA + 1 >= lines.length) return []
+  const headerB = headerA + 1
+
+  const norm = s => (s ?? '').replace(/^'/, '').trim()
+  const idxA = name => lines[headerA].findIndex(c => norm(c) === name)
+  const idxB = name => lines[headerB].findIndex(c => norm(c) === name)
+
+  const cDate = idxA('일자'), cWithdraw = idxA('출금액'), cDeposit = idxB('현금')
+  const infoCols = [
+    ['수표', idxB('수표')], ['대용환전', idxB('대용환전')], ['대용매도', idxB('대용매도')],
+    ['선물차금', idxB('선물차금')], ['옵션차금', idxB('옵션차금')], ['실물인수도결제대금', idxB('실물인수도결제대금')], ['수수료', idxB('수수료')],
+  ]
+
+  const result = []
+  for (let i = headerB + 1; i < lines.length; i++) {
+    const cols = lines[i]
+    const dateRaw = cols[cDate]?.trim()
+    if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateRaw || '')) continue
+
+    const deposit = cleanNumber(cols[cDeposit])
+    const withdraw = cleanNumber(cols[cWithdraw])
+    if (!deposit && !withdraw) continue
+
+    const info = infoCols.filter(([, idx]) => cleanNumber(cols[idx])).map(([label, idx]) => `${label} ${cols[idx].replace(/"/g, '')}`).join(', ')
+
+    if (deposit) {
+      result.push({
+        date: dateRaw.replace(/\//g, '-'),
+        tradeNo: makeTradeNo(dateRaw, '', `입금_${info}`, deposit),
+        memo: info ? `입금 (${info})` : '입금',
+        ioType: '입금',
+        amount: deposit,
+        currency: 'KRW',
+      })
+    }
+    if (withdraw) {
+      result.push({
+        date: dateRaw.replace(/\//g, '-'),
+        tradeNo: makeTradeNo(dateRaw, '', `출금_${info}`, withdraw),
+        memo: info ? `출금 (${info})` : '출금',
+        ioType: '출금',
+        amount: withdraw,
+        currency: 'KRW',
+      })
+    }
+  }
+  return result
+}
+
+// ── 포맷 9: 키움 해외 선물옵션 입출금내역 (선옵 거래내역 상세 화면 붙여넣기, 레코드당 1줄) ──
+// 컬럼: 거래일자 · 거래종류 · 적요 · 통화코드 · 거래금액(원화) · 거래금액(외)(외화) · 원화잔액 · 외화잔액 · 처리시간 등
+export const parseKiwoomUsFuturesCashFlows = text => parseKiwoomCashFlowLines(text, {
+  dateCol: '거래일자', rmrkCol: '적요', crncCol: '통화코드',
+  amtCol: '거래금액', fcAmtCol: '거래금액(외)', balCol: '원화잔액', fcBalCol: '외화잔액', timeCol: '처리시간',
+  dealTpCol: '거래종류', excludeRmrk: ['결제차금', '수수료'], rateCol: '거래단가/환율',
+})
+
+// ── 포맷 10: 미래에셋 입출금내역 (이체내역 붙여넣기, 2줄=1건: 출금줄/입금줄) ──
+// [출금줄] 거래일 · 출금 기관명 · 출금 계좌번호 · 내계좌 메모 · 거래금액 · 처리상태 · 처리시간 · 이체확인증
+// [입금줄] (공백)  · 입금 기관명 · 입금 계좌번호 · 받는계좌 메모 · 수수료   · 처리상태 · 처리시간
+// 입금 기관명이 "미래에셋증권"이면 이체입금, 출금 기관명이 "미래에셋증권"이면 이체출금
+export function parseMiraeCashFlows(text) {
+  const lines = text.trim().split('\n').map(l => l.split('\t'))
+  const headerA = lines.findIndex(c => c[0]?.trim() === '거래일')
+  if (headerA === -1 || headerA + 1 >= lines.length) return []
+  const headerB = headerA + 1
+
+  const norm = s => (s ?? '').replace(/^'/, '').trim()
+  const idxA = name => lines[headerA].findIndex(c => norm(c) === name)
+  const idxB = name => lines[headerB].findIndex(c => norm(c) === name)
+
+  const cDate = idxA('거래일'), cOutOrg = idxA('출금 기관명'), cAmt = idxA('거래금액'), cTime = idxA('처리시간')
+  const cInOrg = idxB('입금 기관명'), cTimeB = idxB('처리시간')
+
+  const result = []
+  for (let i = headerB + 1; i + 1 < lines.length; i += 2) {
+    const lineA = lines[i], lineB = lines[i + 1]
+    const dateRaw = lineA[cDate]?.trim()
+    if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateRaw || '')) continue
+    const time = norm(lineA[cTime])
+    if (!time || !norm(lineB[cTimeB])) continue // 양쪽 처리시간 다 있어야 처리 완료된 건
+
+    const outOrg = norm(lineA[cOutOrg])
+    const inOrg = norm(lineB[cInOrg])
+    const amount = cleanNumber(lineA[cAmt])
+    if (!amount) continue
+
+    let ioType, memo
+    if (inOrg === '미래에셋증권') { ioType = '이체입금'; memo = `이체입금 (${outOrg})` }
+    else if (outOrg === '미래에셋증권') { ioType = '이체출금'; memo = `이체출금 (${inOrg})` }
+    else continue
+
+    result.push({
+      date: dateRaw.replace(/\//g, '-'),
+      tradeNo: makeTradeNo(dateRaw, time, memo, amount),
+      memo,
+      ioType,
+      amount,
+      currency: 'KRW',
+      time,
+    })
+  }
+  return result
+}
+
+// ── 포맷 11: 키움 국내선물옵션 월별손익현황 (붙여넣기, 헤더 2줄+데이터 2줄=1건) ──
+// 컬럼: 월 · 월말예탁자산 · 입금/출금 · 선물매매금/옵션매매금 · 선물매매손익/옵션매매손익 · 옵션미결제평가손익 · 수수료 · 투자평잔 · 월손익 · 매매수익률 · 누적손익
+// 브로커가 주는 "월손익"은 옵션미결제(미실현) 평가손익까지 포함돼있어서 안 씀 —
+// 실제 월손익 = 옵션매매손익(2번째줄) - 수수료(1번째줄). 0인 달은 제외
+export function parseKiwoomKrOptionMonthlyProfit(text) {
+  const lines = text.trim().split('\n').map(l => l.split('\t'))
+  const headerA = lines.findIndex(c => c[0]?.trim() === '월')
+  if (headerA === -1 || headerA + 1 >= lines.length) return []
+  const headerB = headerA + 1
+
+  const idxA = name => lines[headerA].findIndex(c => c.trim() === name)
+  const idxB = name => lines[headerB].findIndex(c => c.trim() === name)
+  const cDate = idxA('월'), cFee = idxA('수수료'), cOptProfit = idxB('옵션매매손익')
+
+  const result = []
+  for (let i = headerB + 1; i + 1 < lines.length; i += 2) {
+    const lineA = lines[i], lineB = lines[i + 1]
+    const dateRaw = lineA[cDate]?.trim()
+    if (!/^\d{4}\/\d{2}$/.test(dateRaw || '')) continue
+    const profit = cleanNumber(lineB[cOptProfit]) - cleanNumber(lineA[cFee])
+    if (!profit) continue
+    result.push({ month: dateRaw.replace('/', '-'), profit, currency: 'KRW' })
+  }
+  return result
+}
+
+// ── 포맷 12: 키움 해외선물옵션 월별손익현황 (붙여넣기, 레코드당 1줄) ──
+// 컬럼: 월 · 통화 · 예수금 · 원화대용금 · 옵션평가차금(전일) · 청산손익 · 수수료 · 월별손익 · 누적손익 · 수익률
+// 월별손익만 필요 — 0인 달은 제외. 외화 금액은 그대로 반환(환산은 호출측에서 처리)
+export function parseKiwoomUsOptionMonthlyProfit(text) {
+  const lines = text.trim().split('\n').map(l => l.split('\t'))
+  const headerA = lines.findIndex(c => c[0]?.trim() === '월')
+  if (headerA === -1) return []
+
+  const idx = name => lines[headerA].findIndex(c => c.trim() === name)
+  const cDate = idx('월'), cCrnc = idx('통화'), cProfit = idx('월별손익')
+
+  const result = []
+  for (let i = headerA + 1; i < lines.length; i++) {
+    const cols = lines[i]
+    const dateRaw = cols[cDate]?.trim()
+    if (!/^\d{4}\/\d{2}$/.test(dateRaw || '')) continue
+    const profit = cleanNumber(cols[cProfit])
+    if (!profit) continue
+    result.push({ month: dateRaw.replace('/', '-'), profitForeign: profit, currency: cols[cCrnc]?.trim() || 'USD' })
+  }
+  return result
+}
+
 // ── 포맷 6: 키움 해외 예수금 ────────────────────────────────
 // 비정형: "원화환산추정인출가능금" 행, 헤더에서 "D+2" 컬럼 위치 파악
 export function parseKiwoomUsCash(text) {

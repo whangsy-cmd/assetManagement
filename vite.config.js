@@ -102,5 +102,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [react(), kiwoomPlugin(env)],
+    define: {
+      __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    },
   }
 })

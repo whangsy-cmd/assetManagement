@@ -7,10 +7,15 @@ import DataInput from './pages/DataInput'
 import AccountSetup from './pages/AccountSetup'
 import SectorManager from './pages/SectorManager'
 import DataView from './pages/DataView'
+import SchemaView from './pages/SchemaView'
+import KiwoomTest from './pages/KiwoomTest'
 import Migration from './pages/Migration'
+import AccountEvalMigration from './pages/AccountEvalMigration'
+import TempAccountBalance from './pages/TempAccountBalance'
 import IncomeReport from './pages/IncomeReport'
 import RebalanceReport from './pages/RebalanceReport'
 import ShannonSimulation from './pages/ShannonSimulation'
+import OptionsPage from './pages/OptionsPage'
 
 function PrivateRoutes() {
   const { user } = useAuth()
@@ -31,12 +36,17 @@ function PrivateRoutes() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/input" element={<DataInput />} />
         <Route path="/dataview" element={<DataView />} />
+        <Route path="/schema" element={<SchemaView />} />
+        <Route path="/kiwoom-test" element={<KiwoomTest />} />
         <Route path="/accounts" element={<AccountSetup />} />
         <Route path="/sectors" element={<SectorManager />} />
         <Route path="/migrate" element={<Migration />} />
+        <Route path="/migrate-account-eval" element={<AccountEvalMigration />} />
+        <Route path="/temp-balance" element={<TempAccountBalance />} />
         <Route path="/income" element={<IncomeReport />} />
         <Route path="/rebalance" element={<RebalanceReport />} />
         <Route path="/shannon-sim" element={<ShannonSimulation />} />
+        <Route path="/options" element={<OptionsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

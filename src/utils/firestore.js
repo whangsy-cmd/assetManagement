@@ -235,6 +235,104 @@ export async function getAllSnapshots(uid) {
     .sort((a, b) => b.date.localeCompare(a.date))
 }
 
+// ── 입출금내역 저장 (거래번호 기준 중복방지) ────────────────
+export async function saveCashFlows(uid, rows) {
+  const noAccount = rows.find(r => !r.accountId)
+  if (noAccount) throw new Error(`계좌번호가 없는 데이터가 있습니다: ${noAccount.date} ${noAccount.memo}`)
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = writeBatch(db)
+    for (const r of rows.slice(i, i + 500)) {
+      const id = `${r.accountId}_${r.tradeNo}`
+      const ref = doc(db, 'users', uid, 'cashFlows', id)
+      batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
+    }
+    await batch.commit()
+  }
+}
+
+// ── 전체 입출금내역 조회 (데이터 조회용) ────────────────────
+export async function getAllCashFlows(uid) {
+  const snap = await getDocs(collection(db, 'users', uid, 'cashFlows'))
+  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
+    .sort((a, b) => b.date.localeCompare(a.date))
+}
+
+// ── 계좌별 마지막 입출금내역 날짜 조회 ──────────────────────
+export async function getLastCashFlowDate(uid, accountId) {
+  const snap = await getDocs(collection(db, 'users', uid, 'cashFlows'))
+  const dates = snap.docs.map(d => d.data()).filter(d => d.accountId === accountId).map(d => d.date)
+  return dates.length ? dates.sort().at(-1) : null
+}
+
+// ── 옵션계좌 월별손익 저장/조회 (입출금내역과 별도 컬렉션, 브로커 제공 월손익 직접 입력) ──
+export async function saveOptionMonthlyProfit(uid, rows) {
+  const noAccount = rows.find(r => !r.accountId)
+  if (noAccount) throw new Error(`계좌번호가 없는 데이터가 있습니다: ${noAccount.month}`)
+  const batch = writeBatch(db)
+  for (const r of rows) {
+    const id = `${r.accountId}_${r.month}`
+    const ref = doc(db, 'users', uid, 'optionMonthlyProfit', id)
+    batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
+  }
+  await batch.commit()
+}
+
+export async function getAllOptionMonthlyProfit(uid) {
+  const snap = await getDocs(collection(db, 'users', uid, 'optionMonthlyProfit'))
+  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
+    .sort((a, b) => b.month.localeCompare(a.month))
+}
+
+export async function getLastOptionMonth(uid, accountId) {
+  const snap = await getDocs(collection(db, 'users', uid, 'optionMonthlyProfit'))
+  const months = snap.docs.map(d => d.data()).filter(d => d.accountId === accountId).map(d => d.month)
+  return months.length ? months.sort().at(-1) : null
+}
+
+// ── 계좌별 평가 테이블 저장/조회 (holdings+cash 집계 결과 materialize) ──
+export async function saveAccountEval(uid, rows) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = writeBatch(db)
+    for (const r of rows.slice(i, i + 500)) {
+      const id = `${r.date}_${r.accountId}`
+      const ref = doc(db, 'users', uid, 'accountEval', id)
+      batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
+    }
+    await batch.commit()
+  }
+}
+
+export async function getAllAccountEval(uid) {
+  const snap = await getDocs(collection(db, 'users', uid, 'accountEval'))
+  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
+}
+
+// ── 임시 계좌 일별 잔고 저장/조회 (브로커 리포트 붙여넣기 이전용) ──
+export async function saveTempAccountBalance(uid, rows) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = writeBatch(db)
+    for (const r of rows.slice(i, i + 500)) {
+      const id = `${r.date}_${r.accountId}`
+      const ref = doc(db, 'users', uid, 'tempAccountDailyBalance', id)
+      batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
+    }
+    await batch.commit()
+  }
+}
+
+export async function getAllTempAccountBalance(uid) {
+  const snap = await getDocs(collection(db, 'users', uid, 'tempAccountDailyBalance'))
+  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
+}
+
+// ── 컬렉션 원본 문서 전체 조회 (백업용, 가공 없음) ──────────
+export async function getAllDocsRaw(uid, colName) {
+  const snap = await getDocs(collection(db, 'users', uid, colName))
+  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
+}
+
 // ── 문서 단건 삭제 ──────────────────────────────────────────
 export async function deleteDocument(uid, colName, docId) {
   await deleteDoc(doc(db, 'users', uid, colName, docId))
@@ -283,6 +381,17 @@ export async function deleteIncomeReport(uid, year) {
 export async function deleteDateData(uid, colName, date) {
   const snap = await getDocs(collection(db, 'users', uid, colName))
   const targets = snap.docs.filter(d => d.data().date === date)
+  for (let i = 0; i < targets.length; i += 500) {
+    const batch = writeBatch(db)
+    targets.slice(i, i + 500).forEach(d => batch.delete(d.ref))
+    await batch.commit()
+  }
+}
+
+// ── 특정 계좌 전체 삭제 ─────────────────────────────────────
+export async function deleteAccountData(uid, colName, accountId) {
+  const snap = await getDocs(collection(db, 'users', uid, colName))
+  const targets = snap.docs.filter(d => d.data().accountId === accountId)
   for (let i = 0; i < targets.length; i += 500) {
     const batch = writeBatch(db)
     targets.slice(i, i + 500).forEach(d => batch.delete(d.ref))

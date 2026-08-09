@@ -157,7 +157,8 @@ export default function IncomeReport() {
     <div className="page">
       <div className="page-heading-row">
         <h2 className="page-heading">이자·배당 소득</h2>
-        <button style={{ ...btnStyle, marginLeft: 'auto' }} onClick={() => fileRef.current?.click()}>
+        <span className="dim" style={{ marginLeft: 'auto', fontSize: 12 }}>키움 금융소득내역서 확인</span>
+        <button style={btnStyle} onClick={() => fileRef.current?.click()}>
           + 엑셀 등록
         </button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFile} />

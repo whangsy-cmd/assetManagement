@@ -49,7 +49,7 @@ async function getToken(kind) {
   return _tokens[kind]
 }
 
-async function kiwoomCall(kind, apiId, body, path = '/api/dostk/acnt') {
+export async function kiwoomCall(kind, apiId, body, path = '/api/dostk/acnt') {
   const token = await getToken(kind)
   const res = await fetch(`${KIWOOM_BASE}${path}`, {
     method: 'POST',
@@ -72,6 +72,52 @@ export const fetchKrCash     = () => kiwoomCall('kr', 'kt00001', { qry_tp: '0', 
 export const fetchUsLedger = () => kiwoomCall('us', 'ust21070', { stex_tp: '', stk_cd: '' }, '/api/us/acnt')
 
 export const fetchUsCashDetail = () => kiwoomCall('us', 'ust21160', {}, '/api/us/acnt')
+
+// cont-yn/next-key 페이징하며 리스트 응답 전체 수집. 유량 초과(HTTP 429 또는 return_code 5) 시 대기 후 재시도
+async function kiwoomListCall(kind, apiId, path, body, listKey) {
+  const token = await getToken(kind)
+  let contYn = 'N', nextKey = ''
+  const rows = []
+  for (let page = 0; page < 20; page++) {
+    if (page > 0) await sleep(250)
+
+    let res, data
+    for (let retry = 0; retry < 4; retry++) {
+      res = await fetch(`${KIWOOM_BASE}${path}`, {
+        method: 'POST',
+        headers: {
+          Authorization:  `Bearer ${token}`,
+          'Content-Type': 'application/json;charset=UTF-8',
+          'api-id':       apiId,
+          'cont-yn':      contYn,
+          'next-key':     nextKey,
+        },
+        body: JSON.stringify(body),
+      })
+      if (res.status === 429) { await sleep(1200); continue }
+      if (!res.ok) throw new Error(`Kiwoom ${res.status} ${await res.text()}`)
+      data = await res.json()
+      if (data.return_code === 5) { await sleep(1200); continue }
+      break
+    }
+    if (!data) throw new Error('Kiwoom 429 — 유량 초과 재시도 실패. 잠시 후 다시 시도하세요.')
+    if (data.return_code !== undefined && data.return_code !== 0)
+      throw new Error(`[${data.return_code}] ${data.return_msg || '조회 실패'}`)
+    rows.push(...(data[listKey] ?? []))
+    const cy = res.headers.get('cont-yn') || 'N'
+    const nk = res.headers.get('next-key') || ''
+    if (cy !== 'Y' || !nk) break
+    contYn = 'Y'; nextKey = nk
+  }
+  return rows
+}
+
+// 위탁종합거래내역요청(kt00015) — tp:'1'(입출금)만 조회
+export const fetchKrCashFlows = (strtDt, endDt) => kiwoomListCall(
+  'kr', 'kt00015', '/api/dostk/acnt',
+  { strt_dt: strtDt, end_dt: endDt, tp: '1', stk_cd: '', crnc_cd: '', gds_tp: '0', frgn_stex_code: '', dmst_stex_tp: '%' },
+  'trst_ovrl_trde_prps_array'
+)
 
 // ── 응답 → 앱 데이터 변환 ───────────────────────────────────────
 function num(v) { return Number(String(v ?? 0).replace(/[,\s]/g, '')) || 0 }
@@ -204,4 +250,20 @@ export function transformUsHoldings(raw, accountId) {
 // D+2 원화환산추정인출가능금액 기준
 export function transformUsCash(raw, accountId) {
   return [{ accountId, amount: num(raw.d2_won_conv_alow_ch) }]
+}
+
+export function transformKrCashFlows(rows, accountId) {
+  return rows
+    .filter(it => str(it.trde_no))
+    .map(it => ({
+      accountId,
+      broker: 'kiwoom_kr',
+      date: toIso(it.trde_dt),
+      tradeNo: `${str(it.trde_dt)}_${str(it.trde_no)}`,
+      ioType: str(it.io_tp_nm),
+      amount: num(it.trde_amt),
+      memo: str(it.rmrk_nm),
+      balance: num(it.entra_remn),
+      time: str(it.proc_tm),
+    }))
 }
