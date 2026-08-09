@@ -63,9 +63,9 @@ export default function CashTab() {
           <thead>
             <tr>
               <th style={styles.th}>계좌</th>
-              <th style={styles.th}>종목평가금액</th>
-              <th style={styles.th}>예수금</th>
-              <th style={styles.th}>총액</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>종목평가금액</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>예수금</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>총액</th>
             </tr>
           </thead>
           <tbody>

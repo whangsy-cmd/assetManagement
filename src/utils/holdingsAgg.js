@@ -1,14 +1,6 @@
-// accounts 컬렉션에 등록되지 않은 계좌(옵션/임시계좌잔고로만 존재)의 카테고리 보정
-export const SPECIAL_ACCOUNT_CATEGORY = {
-  '3058-4099': 'domestic',   // 키움국내
-  '5124-4860': 'overseas',   // 키움해외
-  '1611-0027': 'domestic',   // 키움국내옵션
-  '5767-2099': 'overseas',   // 키움해외옵션
-  '000-0000-0000': 'pension', // 스냅샷에서 이전한 과거 연금 데이터
-}
-
+// 계좌 유형(카테고리)은 계좌 관리에 등록된 값만 사용 — 하드코딩된 계좌번호별 매핑 없음
 export function getAccountCategory(accountId, accCatMap) {
-  return SPECIAL_ACCOUNT_CATEGORY[accountId] || accCatMap[accountId] || 'domestic'
+  return accCatMap[accountId] || 'domestic'
 }
 
 // 대출금은 날짜/계좌 이력이 없는 단일 현재값이라 계좌별평가에 가상 계좌로 등록한다
@@ -51,16 +43,22 @@ export function buildRowsByAccount(rows) {
   return rowsByAccount
 }
 
-// 계좌마다 갱신 주기가 달라도(선물옵션 등) 각 계좌의 asOfDate 이하 최신값을 이월해서 카테고리별로 합산
+// 계좌별로 asOfDate에 정확히 일치하는 데이터만 카테고리별로 합산 (이월 없음 — 없는 날은 0).
+// pension/domestic/overseas는 항상 존재(0 초기화)하고, 그 외 등록된 유형(예: 선물옵션)은 등장하는 만큼 키가 추가됨.
 export function categorySumsAsOf(rowsByAccount, asOfDate, accCatMap) {
   const sums = { pension: 0, domestic: 0, overseas: 0 }
   for (const [accountId, arr] of rowsByAccount) {
-    let latestRow = null
-    for (const r of arr) { if (r.date > asOfDate) break; latestRow = r }
-    if (!latestRow) continue
-    sums[getAccountCategory(accountId, accCatMap)] += latestRow.totalAmt || 0
+    const row = arr.find(r => r.date === asOfDate)
+    if (!row) continue
+    const cat = getAccountCategory(accountId, accCatMap)
+    sums[cat] = (sums[cat] || 0) + (row.totalAmt || 0)
   }
   return sums
+}
+
+// categorySumsAsOf 결과의 모든 카테고리(고정 3개 + 추가 유형) 합계
+export function sumCategoryValues(sums) {
+  return Object.values(sums).reduce((a, b) => a + (b || 0), 0)
 }
 
 // 계좌별 가장 최근 예수금(cashAmt) 맵

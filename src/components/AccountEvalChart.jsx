@@ -3,16 +3,10 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 const CHART_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16']
 
-// 스택 순서 (아래→위): 옵션계좌 2개 → 연금 등 나머지(계좌번호순) → 키움국내 → 키움해외
-const OPTION_ACCOUNTS = new Set(['1611-0027', '5767-2099'])
-const KIWOOM_KR_STOCK = '3058-4099'
-const KIWOOM_US_STOCK = '5124-4860'
-
-function accountRank(accountId) {
-  if (OPTION_ACCOUNTS.has(accountId)) return 0
-  if (accountId === KIWOOM_KR_STOCK) return 2
-  if (accountId === KIWOOM_US_STOCK) return 3
-  return 1
+// 스택 순서 (아래→위): 선물옵션 → 연금 등 나머지 → 국내 → 해외
+const CATEGORY_RANK = { '선물옵션': 0, '연금': 1, '국내': 2, '해외': 3 }
+function categoryRank(label) {
+  return CATEGORY_RANK[label] ?? 1.5
 }
 
 function fmtAbbrev(n) {
@@ -23,24 +17,28 @@ function fmtAbbrev(n) {
   return n.toLocaleString()
 }
 
-// 계좌별 총액(totalAmt)을 날짜 기준으로 피벗해 스택 영역 차트 데이터 생성
-// 예탁금 없거나 0인 (날짜,계좌)는 제외 — 해당 계좌는 그 날 그래프에 표시 안 함
-function buildChartData(rows, startDate) {
+// 계좌별 총액(totalAmt)을 유형(카테고리)별로 합산해 날짜 기준으로 피벗한 스택 영역 차트 데이터 생성
+// 예탁금 없거나 0인 (날짜,계좌)는 제외 — 해당 계좌는 그 날 합계에 포함 안 함
+function buildChartData(rows, startDate, categoryOf) {
   const filtered = rows.filter(r => (!startDate || r.date >= startDate) && r.totalAmt)
-  const accountIds = [...new Set(filtered.map(r => r.accountId))]
-    .sort((a, b) => accountRank(a) - accountRank(b) || a.localeCompare(b))
-  const byDateAccount = new Map()
-  for (const r of filtered) byDateAccount.set(`${r.date}_${r.accountId}`, r.totalAmt)
+  const keyOf = r => categoryOf ? categoryOf(r.accountId) : r.accountId
+  const groups = [...new Set(filtered.map(keyOf))]
+    .sort((a, b) => categoryRank(a) - categoryRank(b) || a.localeCompare(b))
+  const byDateGroup = new Map()
+  for (const r of filtered) {
+    const key = `${r.date}_${keyOf(r)}`
+    byDateGroup.set(key, (byDateGroup.get(key) || 0) + r.totalAmt)
+  }
   const dates = [...new Set(filtered.map(r => r.date))].sort()
   const data = dates.map(date => {
     const point = { date }
-    for (const accountId of accountIds) {
-      const v = byDateAccount.get(`${date}_${accountId}`)
-      if (v) point[accountId] = v
+    for (const group of groups) {
+      const v = byDateGroup.get(`${date}_${group}`)
+      if (v) point[group] = v
     }
     return point
   })
-  return { data, accountIds }
+  return { data, groups }
 }
 
 function AccountEvalTooltip({ active, payload, label }) {
@@ -59,9 +57,10 @@ function AccountEvalTooltip({ active, payload, label }) {
   )
 }
 
-// 계좌별평가(accountEval) 테이블 rows를 계좌별 스택 영역 차트로 표시
-export default function AccountEvalChart({ rows, startDate, title = '총자산 변동 추이 (계좌별)', height = 260 }) {
-  const { data, accountIds } = buildChartData(rows, startDate)
+// 계좌별평가(accountEval) 테이블 rows를 계좌 유형(카테고리)별 스택 영역 차트로 표시.
+// categoryOf(accountId)를 넘기면 유형별로 합산, 안 넘기면 계좌별로 그대로 표시.
+export default function AccountEvalChart({ rows, startDate, categoryOf, title = '총자산 변동 추이 (유형별)', height = 260 }) {
+  const { data, groups } = buildChartData(rows, startDate, categoryOf)
   if (!data.length) return null
 
   return (
@@ -69,9 +68,9 @@ export default function AccountEvalChart({ rows, startDate, title = '총자산 �
       <div style={styles.header}>
         <h3 style={styles.title}>{title}</h3>
         <div style={styles.legend}>
-          {accountIds.map((id, i) => (
-            <span key={id} style={styles.legendItem}>
-              <span style={{ ...styles.legendDot, background: CHART_COLORS[i % CHART_COLORS.length] }} />{id}
+          {groups.map((g, i) => (
+            <span key={g} style={styles.legendItem}>
+              <span style={{ ...styles.legendDot, background: CHART_COLORS[i % CHART_COLORS.length] }} />{g}
             </span>
           ))}
         </div>
@@ -82,11 +81,11 @@ export default function AccountEvalChart({ rows, startDate, title = '총자산 �
           <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={d => d.slice(5)} />
           <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={fmtAbbrev} width={60} />
           <Tooltip content={<AccountEvalTooltip />} />
-          {accountIds.map((id, i) => (
+          {groups.map((g, i) => (
             <Area
-              key={id}
+              key={g}
               type="monotone"
-              dataKey={id}
+              dataKey={g}
               stackId="1"
               stroke={CHART_COLORS[i % CHART_COLORS.length]}
               strokeOpacity={0.5}

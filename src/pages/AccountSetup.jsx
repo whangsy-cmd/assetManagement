@@ -13,8 +13,8 @@ const INITIAL_ACCOUNTS = [
   { accountId: '010-9786-1102-5', broker: 'mirae', category: 'pension',  name: '미래에셋 IRP',      type: 'stock' },
 ]
 
-const BROKER_LABEL = { mirae: '미래에셋', kiwoom_kr: '키움 국내', kiwoom_us: '키움 해외' }
-export const CATEGORY_LABEL = { domestic: '국내', overseas: '해외', pension: '연금', irp: '연금', isa: '연금', general: '국내' }
+const BROKER_LABEL = { mirae: '미래에셋', kiwoom_kr: '키움 국내', kiwoom_us: '키움 해외', ibk: '기업은행' }
+export const CATEGORY_LABEL = { domestic: '국내', overseas: '해외', pension: '연금', futures: '선물옵션', irp: '연금', isa: '연금', general: '국내' }
 
 export default function AccountSetup() {
   const { user } = useAuth()
@@ -24,6 +24,7 @@ export default function AccountSetup() {
   const [editingId, setEditingId] = useState(null)
   const [editName, setEditName] = useState('')
   const [editCategory, setEditCategory] = useState('')
+  const [editBroker, setEditBroker] = useState('')
   const [actionError, setActionError] = useState('')
 
   // 대출금
@@ -114,7 +115,7 @@ export default function AccountSetup() {
     setSaving(true)
     setActionError('')
     try {
-      await saveAccount({ ...acc, name: editName, category: editCategory })
+      await saveAccount({ ...acc, name: editName, category: editCategory, broker: editBroker })
       setEditingId(null)
     } catch (e) {
       setActionError('수정 실패: ' + e.message)
@@ -177,13 +178,25 @@ export default function AccountSetup() {
             {accounts.map(acc => (
               <tr key={acc.id} style={styles.tr}>
                 <td style={styles.td}><code style={styles.code}>{acc.accountId}</code></td>
-                <td style={styles.td}>{BROKER_LABEL[acc.broker] || acc.broker}</td>
+                <td style={styles.td}>
+                  {editingId === acc.id ? (
+                    <select style={styles.inlineSelect} value={editBroker} onChange={e => setEditBroker(e.target.value)}>
+                      <option value="mirae">미래에셋</option>
+                      <option value="kiwoom_kr">키움 국내</option>
+                      <option value="kiwoom_us">키움 해외</option>
+                      <option value="ibk">기업은행</option>
+                    </select>
+                  ) : (
+                    BROKER_LABEL[acc.broker] || acc.broker
+                  )}
+                </td>
                 <td style={styles.td}>
                   {editingId === acc.id ? (
                     <select style={styles.inlineSelect} value={editCategory} onChange={e => setEditCategory(e.target.value)}>
                       <option value="domestic">국내</option>
                       <option value="overseas">해외</option>
                       <option value="pension">연금</option>
+                      <option value="futures">선물옵션</option>
                     </select>
                   ) : (
                     CATEGORY_LABEL[acc.category] || acc.category
@@ -211,7 +224,7 @@ export default function AccountSetup() {
                       </>
                     ) : (
                       <>
-                        <button style={styles.editBtn} onClick={() => { setEditingId(acc.id); setEditName(acc.name); setEditCategory(acc.category) }}>수정</button>
+                        <button style={styles.editBtn} onClick={() => { setEditingId(acc.id); setEditName(acc.name); setEditCategory(acc.category); setEditBroker(acc.broker) }}>수정</button>
                         <button style={styles.delBtn} onClick={() => handleDeleteAccount(acc.id)}>삭제</button>
                       </>
                     )}
@@ -236,11 +249,13 @@ export default function AccountSetup() {
             <option value="mirae">미래에셋</option>
             <option value="kiwoom_kr">키움 국내</option>
             <option value="kiwoom_us">키움 해외</option>
+            <option value="ibk">기업은행</option>
           </select>
           <select style={styles.select} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
             <option value="domestic">국내</option>
             <option value="overseas">해외</option>
             <option value="pension">연금</option>
+            <option value="futures">선물옵션</option>
           </select>
           <input
             style={styles.input}

@@ -61,6 +61,8 @@
 .data-table .muted { color: #64748b; }
 .data-table th.sep, .data-table td.sep { border-left: 1px solid #334155; }
 .data-table td.sep-dim { border-left: 1px solid #1e293b; }
+.data-table td.pos { color: #22c55e; }
+.data-table td.neg { color: #ef4444; }
 
 /* ── Color utilities ─────────────────────────────────────── */
 .pos { color: #22c55e; }
@@ -74,6 +76,7 @@
 .badge-domestic { background: #0c1a3a; color: #93c5fd; }
 .badge-overseas { background: #052e16; color: #4ade80; }
 .badge-pension  { background: #422006; color: #fbbf24; }
+.badge-futures  { background: #3b0764; color: #c4b5fd; }
 
 /* ── Toggle group ────────────────────────────────────────── */
 .toggle-group { display: flex; gap: 4px; }

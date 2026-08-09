@@ -205,9 +205,9 @@ export default function CashFlowsTab() {
               <th style={styles.th}>계좌</th>
               <th style={styles.th}>구분</th>
               <th style={styles.th}>통화</th>
-              <th style={styles.th}>금액</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>금액</th>
               <th style={styles.th}>적요</th>
-              <th style={styles.th}>예수금잔고</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>예수금잔고</th>
             </tr>
           </thead>
           <tbody>

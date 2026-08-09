@@ -3,13 +3,13 @@ import { Fragment, useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
 import { getLatestHoldings, getAccounts, getAllAccountEval, getSectors, getRebalanceSettings, getLoans } from '../utils/firestore'
-import { getAccountCategory, LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, latestCashByAccount } from '../utils/holdingsAgg'
+import { getAccountCategory, LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, sumCategoryValues, latestCashByAccount } from '../utils/holdingsAgg'
 import AccountEvalChart from '../components/AccountEvalChart'
 import { fmt, sgn, pc } from '../utils/format'
 import '../common.css'
 
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16']
-const CAT_LABEL = { pension: '연금', domestic: '국내', overseas: '해외' }
+const CAT_LABEL = { pension: '연금', domestic: '국내', overseas: '해외', futures: '선물옵션' }
 const DASHBOARD_START_DATE = '2025-02-07' // 그래프/수익률/누적수익 등 전체 계산 시작 기준일
 
 function fmtWon(n) {
@@ -33,7 +33,19 @@ function makePieLabel(denom) {
   }
 }
 
-function computeAggregates(snapshots, mode) {
+// 카테고리 표시 순서 — 등록된 카테고리 중 알려진 것만 우선 정렬, 나머지는 이름순 뒤에 붙임
+const CATEGORY_ORDER = ['overseas', 'domestic', 'pension', 'futures']
+function sortCategories(cats) {
+  return [...cats].sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a), bi = CATEGORY_ORDER.indexOf(b)
+    if (ai === -1 && bi === -1) return a.localeCompare(b)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
+}
+
+function computeAggregates(snapshots, mode, categories) {
   const groups = {}
   for (const s of snapshots) {
     const key = mode === 'year' ? s.date.slice(0, 4) : s.date.slice(0, 7)
@@ -46,33 +58,24 @@ function computeAggregates(snapshots, mode) {
   return keys.map((key, i) => {
     const curr = groups[key]
     const base = i > 0 ? groups[keys[i - 1]] : absFirst
-    const baseBal    = base.totalBalance ?? 0
-    const overseasChg = (curr.overseas?.balance ?? 0) - (base.overseas?.balance ?? 0)
-    const domesticChg = (curr.domestic?.balance ?? 0) - (base.domestic?.balance ?? 0)
-    const pensionChg  = (curr.pension?.balance  ?? 0) - (base.pension?.balance  ?? 0)
-    const totalChg    = (curr.totalBalance ?? 0) - baseBal
-    const rate        = baseBal > 0 ? totalChg / baseBal * 100 : null
-    return {
-      period: key,
-      overseasBal: curr.overseas?.balance ?? 0, overseasChg,
-      domesticBal: curr.domestic?.balance ?? 0, domesticChg,
-      pensionBal:  curr.pension?.balance  ?? 0, pensionChg,
-      totalBal:    curr.totalBalance ?? 0,       totalChg,
-      rate,
+    const baseBal = base.totalBalance ?? 0
+    const totalChg = (curr.totalBalance ?? 0) - baseBal
+    const rate = baseBal > 0 ? totalChg / baseBal * 100 : null
+    const cat = {}
+    for (const c of categories) {
+      const bal = curr.categories[c] || 0
+      cat[c] = { bal, chg: bal - (base.categories[c] || 0) }
     }
+    return { period: key, cat, totalBal: curr.totalBalance ?? 0, totalChg, rate }
   }).reverse()
 }
 
-function AggregateTable({ rows }) {
-  const totals = rows.reduce(
-    (acc, r) => ({
-      overseasChg: acc.overseasChg + r.overseasChg,
-      domesticChg: acc.domesticChg + r.domesticChg,
-      pensionChg:  acc.pensionChg  + r.pensionChg,
-      totalChg:    acc.totalChg    + r.totalChg,
-    }),
-    { overseasChg: 0, domesticChg: 0, pensionChg: 0, totalChg: 0 }
-  )
+function AggregateTable({ rows, categories }) {
+  const totals = rows.reduce((acc, r) => {
+    const next = { ...acc, totalChg: acc.totalChg + r.totalChg }
+    for (const c of categories) next[c] = (acc[c] || 0) + r.cat[c].chg
+    return next
+  }, { totalChg: 0 })
 
   return (
     <div className="table-wrap">
@@ -80,16 +83,14 @@ function AggregateTable({ rows }) {
         <thead>
           <tr>
             <th rowSpan={2}>기간</th>
-            <th className="th-group sep" colSpan={2}>해외</th>
-            <th className="th-group sep" colSpan={2}>국내</th>
-            <th className="th-group sep" colSpan={2}>연금</th>
+            {categories.map(c => <th key={c} className="th-group sep" colSpan={2}>{CAT_LABEL[c] || c}</th>)}
             <th className="th-group sep" colSpan={2}>합계</th>
             <th className="r sep" rowSpan={2}>수익률</th>
           </tr>
           <tr>
-            <th className="r sep">잔액</th><th className="r">수익</th>
-            <th className="r sep">잔액</th><th className="r">수익</th>
-            <th className="r sep">잔액</th><th className="r">수익</th>
+            {categories.map(c => (
+              <Fragment key={c}><th className="r sep">잔액</th><th className="r">수익</th></Fragment>
+            ))}
             <th className="r sep">잔액</th><th className="r">수익</th>
           </tr>
         </thead>
@@ -97,12 +98,12 @@ function AggregateTable({ rows }) {
           {rows.map((r, i) => (
             <tr key={i}>
               <td>{r.period}</td>
-              <td className="r sep-dim">{fmt(r.overseasBal)}</td>
-              <td className={`r ${pc(r.overseasChg)}`}>{sgn(r.overseasChg)}{fmt(r.overseasChg)}</td>
-              <td className="r sep-dim">{fmt(r.domesticBal)}</td>
-              <td className={`r ${pc(r.domesticChg)}`}>{sgn(r.domesticChg)}{fmt(r.domesticChg)}</td>
-              <td className="r sep-dim">{fmt(r.pensionBal)}</td>
-              <td className={`r ${pc(r.pensionChg)}`}>{sgn(r.pensionChg)}{fmt(r.pensionChg)}</td>
+              {categories.map(c => (
+                <Fragment key={c}>
+                  <td className="r sep-dim">{fmt(r.cat[c].bal)}</td>
+                  <td className={`r ${pc(r.cat[c].chg)}`}>{sgn(r.cat[c].chg)}{fmt(r.cat[c].chg)}</td>
+                </Fragment>
+              ))}
               <td className="r bold sep-dim">{fmt(r.totalBal)}</td>
               <td className={`r bold ${pc(r.totalChg)}`}>{sgn(r.totalChg)}{fmt(r.totalChg)}</td>
               <td className={`r sep-dim ${r.rate !== null ? pc(r.rate) : 'muted'}`}>
@@ -112,9 +113,12 @@ function AggregateTable({ rows }) {
           ))}
           <tr className="total-row">
             <td className="bold dim">수익합계</td>
-            <td className="sep-dim" /><td className={`r bold ${pc(totals.overseasChg)}`}>{sgn(totals.overseasChg)}{fmt(totals.overseasChg)}</td>
-            <td className="sep-dim" /><td className={`r bold ${pc(totals.domesticChg)}`}>{sgn(totals.domesticChg)}{fmt(totals.domesticChg)}</td>
-            <td className="sep-dim" /><td className={`r bold ${pc(totals.pensionChg)}`}>{sgn(totals.pensionChg)}{fmt(totals.pensionChg)}</td>
+            {categories.map(c => (
+              <Fragment key={c}>
+                <td className="sep-dim" />
+                <td className={`r bold ${pc(totals[c])}`}>{sgn(totals[c])}{fmt(totals[c])}</td>
+              </Fragment>
+            ))}
             <td className="sep-dim" /><td className={`r bold ${pc(totals.totalChg)}`}>{sgn(totals.totalChg)}{fmt(totals.totalChg)}</td>
             <td className="sep-dim" />
           </tr>
@@ -182,10 +186,10 @@ export default function Dashboard() {
   const latestSums = categorySumsAsOf(rowsByAccount, latestDate, accCatMap)
   const prevSums = prevDate ? categorySumsAsOf(rowsByAccount, prevDate, accCatMap) : latestSums
   const firstSums = categorySumsAsOf(rowsByAccount, firstDate, accCatMap)
-  const prevTotal = prevSums.pension + prevSums.domestic + prevSums.overseas
+  const prevTotal = sumCategoryValues(prevSums)
 
   const totalLoan = loans.reduce((s, l) => s + (l.amount || 0), 0)
-  const totalBalance = latestSums.pension + latestSums.domestic + latestSums.overseas
+  const totalBalance = sumCategoryValues(latestSums)
 
   const latest = {
     date: latestDate,
@@ -197,6 +201,7 @@ export default function Dashboard() {
     domestic: { balance: latestSums.domestic, change: latestSums.domestic - prevSums.domestic },
     overseas: { balance: latestSums.overseas, change: latestSums.overseas - prevSums.overseas },
     pension:  { balance: latestSums.pension,  change: latestSums.pension  - prevSums.pension },
+    futures:  { balance: latestSums.futures || 0, change: (latestSums.futures || 0) - (prevSums.futures || 0) },
   }
   const weekChange     = latest.totalChange
   const weekChangeRate = latest.totalChangeRate
@@ -212,14 +217,15 @@ export default function Dashboard() {
     sectorAgg[sec] = (sectorAgg[sec] || 0) + (h.evalAmt || 0)
   }
   const sectorStockTotal = Object.values(sectorAgg).reduce((a, b) => a + b, 0)
-  const cashInSector = (domestic + overseas + pension) - sectorStockTotal
+  const cashInSector = totalBalance - sectorStockTotal
   if (cashInSector > 0) sectorAgg['예수금'] = (sectorAgg['예수금'] || 0) + cashInSector
   const netDenom  = latest.netBalance || sectorStockTotal || 1
   const sectorData = Object.entries(sectorAgg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
   const categoryData = [
-    { name: '국내', value: domestic - (latest.totalLoan || 0) },
-    { name: '해외', value: overseas },
-    { name: '연금', value: pension },
+    ...Object.entries(latestSums).map(([cat, value]) => ({
+      name: CAT_LABEL[cat] || cat,
+      value: cat === 'domestic' ? value - (latest.totalLoan || 0) : value,
+    })),
     ...(latest.totalLoan > 0 ? [{ name: '대출금', value: latest.totalLoan }] : []),
   ].filter(d => d.value > 0).sort((a, b) => b.value - a.value)
 
@@ -286,7 +292,7 @@ export default function Dashboard() {
   )
 
   // 누적 수익 (계좌별평가 최초~최신 날짜 기준)
-  const first = { date: firstDate, totalBalance: firstSums.pension + firstSums.domestic + firstSums.overseas }
+  const first = { date: firstDate, totalBalance: sumCategoryValues(firstSums) }
   const cumulativeGain = (latest.totalBalance ?? 0) - (first.totalBalance ?? 0)
   const cumulativeRate = (first.totalBalance ?? 0) > 0 ? (cumulativeGain / first.totalBalance) * 100 : 0
   const months = Math.max(1,
@@ -322,23 +328,18 @@ export default function Dashboard() {
   const holdingCount          = Object.keys(codeAgg).length
 
   // 기간별 수익 집계 — 계좌별평가를 날짜별 카테고리 합계로 변환해 스냅샷과 동일한 형태로 공급
+  const categories = sortCategories([...new Set(Object.values(accCatMap))])
   const snapshotsLike = evalDates.map(d => {
     const s = categorySumsAsOf(rowsByAccount, d, accCatMap)
-    return {
-      date: d,
-      pension:  { balance: s.pension },
-      domestic: { balance: s.domestic },
-      overseas: { balance: s.overseas },
-      totalBalance: s.pension + s.domestic + s.overseas,
-    }
+    return { date: d, categories: s, totalBalance: sumCategoryValues(s) }
   })
-  const aggData = computeAggregates(snapshotsLike, aggMode)
+  const aggData = computeAggregates(snapshotsLike, aggMode, categories)
 
   return (
     <div className="page">
       <div className="page-heading-row">
         <h2 className="page-heading">대시보드</h2>
-        <span className="page-heading-sub">{latest.date} 기준</span>
+        <span className="page-heading-sub">{first.date} ~ {latest.date} 기준</span>
         <span className="page-heading-net"><span className="page-heading-sub">순자산&nbsp;</span>{(latest.netBalance ?? 0).toLocaleString()}원</span>
       </div>
 
@@ -358,6 +359,7 @@ export default function Dashboard() {
           { label: '국내', val: domestic, chg: latest.domestic?.change ?? 0 },
           { label: '해외', val: overseas, chg: latest.overseas?.change ?? 0 },
           { label: '연금', val: pension,  chg: latest.pension?.change  ?? 0 },
+          { label: '선물옵션', val: latest.futures.balance, chg: latest.futures.change },
           ...(latest.totalLoan > 0 ? [{ label: '대출금', val: latest.totalLoan, chg: null, neg: true }] : []),
         ].map(({ label, val, chg, neg }) => (
           <div key={label} className="summary-item">
@@ -376,7 +378,7 @@ export default function Dashboard() {
         <div className="summary-divider" />
 
         {[
-          { label: '누적수익',   val: `${sgn(cumulativeGain)}${fmt(cumulativeGain)}원`, color: pc(cumulativeGain), sub: `${first.date.slice(0,7)} ~` },
+          { label: '누적수익',   val: `${sgn(cumulativeGain)}${fmt(cumulativeGain)}원`, color: pc(cumulativeGain), sub: `${first.date} ~` },
           { label: '누적수익률', val: `${sgn(cumulativeRate)}${cumulativeRate.toFixed(2)}%`, color: pc(cumulativeRate), sub: `최초 ${fmt(first.totalBalance)}원` },
           { label: '월평균수익', val: `${sgn(monthlyAvgRate)}${monthlyAvgRate.toFixed(2)}%`, color: pc(monthlyAvgRate), sub: `${months}개월` },
         ].map(({ label, val, color, sub }) => (
@@ -424,7 +426,7 @@ export default function Dashboard() {
       </div>
 
       {/* 총자산 변동 차트 (계좌별평가 기준) */}
-      <AccountEvalChart rows={evalRows} />
+      <AccountEvalChart rows={evalRows} categoryOf={id => CAT_LABEL[getAccountCategory(id, accCatMap)] || getAccountCategory(id, accCatMap)} />
 
       {/* 비중 차트 */}
       <div className="card-row">
@@ -588,7 +590,7 @@ export default function Dashboard() {
             <button className={`toggle-btn${aggMode === 'year'  ? ' active' : ''}`} onClick={() => setAggMode('year')}>연별</button>
           </div>
         </div>
-        <AggregateTable rows={aggData} />
+        <AggregateTable rows={aggData} categories={categories} />
       </div>
     </div>
   )

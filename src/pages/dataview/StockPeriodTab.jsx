@@ -73,11 +73,11 @@ export default function StockPeriodTab() {
           <thead>
             <tr>
               <th style={styles.th}>날짜</th>
-              <th style={styles.th}>수량</th>
-              <th style={styles.th}>매입금액</th>
-              <th style={styles.th}>평가금액</th>
-              <th style={styles.th}>평가손익</th>
-              <th style={styles.th}>수익률</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>수량</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>매입금액</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>평가금액</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>평가손익</th>
+              <th style={{ ...styles.th, textAlign: 'right' }}>수익률</th>
             </tr>
           </thead>
           <tbody>

@@ -7,5 +7,5 @@ export function fmt(n) {
   return Math.round(n).toLocaleString()
 }
 
-export function sgn(v) { return v >= 0 ? '+' : '' }
+export function sgn() { return '' }
 export function pc(v) { return v >= 0 ? 'pos' : 'neg' }

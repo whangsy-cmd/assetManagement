@@ -4,8 +4,12 @@ import * as XLSX from 'xlsx'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAccounts } from '../../hooks/useAccounts'
 import { getAllAccountEval } from '../../utils/firestore'
-import { LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf } from '../../utils/holdingsAgg'
+import { LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, sumCategoryValues } from '../../utils/holdingsAgg'
 import { fmt, styles } from './shared'
+
+const th = { ...styles.th, padding: '9px 6px' }
+const thR = { ...th, textAlign: 'right' }
+const td = { ...styles.td, padding: '9px 6px' }
 
 // ── 계좌통합 조회 탭 (계좌별평가를 일자별로 합산) ───────────────
 export default function SnapshotsTab() {
@@ -45,15 +49,16 @@ export default function SnapshotsTab() {
   const evalDates = [...new Set(evalRows.map(r => r.date))].sort()
   const summary = evalDates.map(date => {
     const s = categorySumsAsOf(rowsByAccount, date, accCatMap)
-    const totalBalance = s.pension + s.domestic + s.overseas
+    const totalBalance = sumCategoryValues(s)
     const totalLoan = loanAsOf(date)
-    return { date, domestic: s.domestic, overseas: s.overseas, pension: s.pension, totalBalance, totalLoan, netBalance: totalBalance - totalLoan }
+    return { date, domestic: s.domestic, overseas: s.overseas, pension: s.pension, futures: s.futures || 0, totalBalance, totalLoan, netBalance: totalBalance - totalLoan }
   })
   for (let i = 0; i < summary.length; i++) {
     const prev = i > 0 ? summary[i - 1] : null
     summary[i].domesticChange = prev ? summary[i].domestic - prev.domestic : 0
     summary[i].overseasChange = prev ? summary[i].overseas - prev.overseas : 0
     summary[i].pensionChange = prev ? summary[i].pension - prev.pension : 0
+    summary[i].futuresChange = prev ? summary[i].futures - prev.futures : 0
     summary[i].totalChange = prev ? summary[i].totalBalance - prev.totalBalance : 0
     summary[i].totalChangeRate = prev && prev.totalBalance ? (summary[i].totalChange / prev.totalBalance) * 100 : 0
   }
@@ -69,6 +74,8 @@ export default function SnapshotsTab() {
       해외증감: r.overseasChange,
       연금: r.pension,
       연금증감: r.pensionChange,
+      선물옵션: r.futures,
+      선물옵션증감: r.futuresChange,
       총잔액: r.totalBalance,
       총증감: r.totalChange,
       '증가율(%)': Number(r.totalChangeRate ?? 0).toFixed(2),
@@ -96,35 +103,39 @@ export default function SnapshotsTab() {
         <table style={styles.table}>
           <thead>
             <tr>
-              <th style={styles.th}>날짜</th>
-              <th style={styles.th}>국내</th>
-              <th style={styles.th}>증감</th>
-              <th style={styles.th}>해외</th>
-              <th style={styles.th}>증감</th>
-              <th style={styles.th}>연금</th>
-              <th style={styles.th}>증감</th>
-              <th style={styles.th}>총잔액</th>
-              <th style={styles.th}>총증감</th>
-              <th style={styles.th}>증가율</th>
-              <th style={styles.th}>대출금</th>
-              <th style={styles.th}>순자산</th>
+              <th style={th}>날짜</th>
+              <th style={thR}>국내</th>
+              <th style={thR}>증감</th>
+              <th style={thR}>해외</th>
+              <th style={thR}>증감</th>
+              <th style={thR}>연금</th>
+              <th style={thR}>증감</th>
+              <th style={thR}>선물옵션</th>
+              <th style={thR}>증감</th>
+              <th style={thR}>총잔액</th>
+              <th style={thR}>총증감</th>
+              <th style={thR}>증가율</th>
+              <th style={thR}>대출금</th>
+              <th style={thR}>순자산</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map(row => (
               <tr key={row.date} style={styles.tr}>
-                <td style={styles.td}>{row.date}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.domestic)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: row.domesticChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.domesticChange)}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.overseas)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: row.overseasChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.overseasChange)}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.pension)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: row.pensionChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.pensionChange)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>{fmt(row.totalBalance)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: row.totalChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.totalChange)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: row.totalChangeRate >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.totalChangeRate ?? 0).toFixed(2)}%</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: '#f87171' }}>{row.totalLoan > 0 ? fmt(row.totalLoan) : '-'}</td>
-                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600, color: '#a78bfa' }}>{fmt(row.netBalance)}</td>
+                <td style={td}>{row.date}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{fmt(row.domestic)}</td>
+                <td style={{ ...td, textAlign: 'right', color: row.domesticChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.domesticChange)}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{fmt(row.overseas)}</td>
+                <td style={{ ...td, textAlign: 'right', color: row.overseasChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.overseasChange)}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{fmt(row.pension)}</td>
+                <td style={{ ...td, textAlign: 'right', color: row.pensionChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.pensionChange)}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{fmt(row.futures)}</td>
+                <td style={{ ...td, textAlign: 'right', color: row.futuresChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.futuresChange)}</td>
+                <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{fmt(row.totalBalance)}</td>
+                <td style={{ ...td, textAlign: 'right', color: row.totalChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.totalChange)}</td>
+                <td style={{ ...td, textAlign: 'right', color: row.totalChangeRate >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.totalChangeRate ?? 0).toFixed(2)}%</td>
+                <td style={{ ...td, textAlign: 'right', color: '#f87171' }}>{row.totalLoan > 0 ? fmt(row.totalLoan) : '-'}</td>
+                <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#a78bfa' }}>{fmt(row.netBalance)}</td>
               </tr>
             ))}
           </tbody>
