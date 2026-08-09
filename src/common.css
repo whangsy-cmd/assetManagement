@@ -19,7 +19,7 @@
 .layout-main { flex: 1; }
 
 /* ── Layout ──────────────────────────────────────────────── */
-.page { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+.page { max-width: 1250px; margin: 0 auto; padding: 24px 16px; }
 
 .page-heading-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
 .page-heading-net { margin-left: auto; color: #f1f5f9; font-size: 20px; font-weight: 700; }

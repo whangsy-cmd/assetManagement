@@ -15,7 +15,6 @@ import TempAccountBalance from './pages/TempAccountBalance'
 import IncomeReport from './pages/IncomeReport'
 import RebalanceReport from './pages/RebalanceReport'
 import ShannonSimulation from './pages/ShannonSimulation'
-import OptionsPage from './pages/OptionsPage'
 
 function PrivateRoutes() {
   const { user } = useAuth()
@@ -46,7 +45,6 @@ function PrivateRoutes() {
         <Route path="/income" element={<IncomeReport />} />
         <Route path="/rebalance" element={<RebalanceReport />} />
         <Route path="/shannon-sim" element={<ShannonSimulation />} />
-        <Route path="/options" element={<OptionsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

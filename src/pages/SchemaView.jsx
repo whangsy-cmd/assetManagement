@@ -9,7 +9,7 @@ const SAMPLE_SIZE = 3
 const DESCRIPTIONS = {
   holdings: '보유종목 (날짜별 계좌별 종목 수량/매입금액/평가금액)',
   cash: '예수금 (날짜별 계좌별 잔액)',
-  snapshots: '자산 스냅샷 (날짜별 국내/해외/연금 잔액, 총잔액, 대출, 순자산)',
+  snapshots: '자산 스냅샷 (날짜별 국내/해외/연금 잔액, 총잔액, 대출, 순자산) — 2026/8/9 기준 더이상 사용안함',
   accounts: '계좌 목록 (계좌번호, 카테고리 등 설정)',
   sectors: '종목별 섹터 분류',
   loans: '대출금 목록',
@@ -136,7 +136,7 @@ export default function SchemaView() {
 }
 
 const styles = {
-  container: { maxWidth: 1100, margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, margin: 0 },
   desc: { color: '#64748b', fontSize: 13, margin: '8px 0 20px' },
   card: { background: '#1e293b', borderRadius: 12, marginBottom: 12, overflow: 'hidden' },

@@ -355,7 +355,7 @@ export default function AccountSetup() {
 }
 
 const styles = {
-  container: { maxWidth: 800, margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   loading: { color: '#94a3b8', padding: 40, textAlign: 'center' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, marginBottom: 24 },
   initBox: { background: '#1e293b', borderRadius: 10, padding: '20px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' },

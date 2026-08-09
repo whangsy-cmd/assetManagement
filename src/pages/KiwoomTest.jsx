@@ -171,7 +171,7 @@ export default function KiwoomTest() {
 }
 
 const styles = {
-  container: { maxWidth: 1100, margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, margin: 0 },
   desc: { color: '#64748b', fontSize: 13, margin: '8px 0 20px' },
   section: { background: '#1e293b', borderRadius: 12, padding: '16px 20px', marginBottom: 12 },

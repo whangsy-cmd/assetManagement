@@ -285,55 +285,6 @@ export function parseMiraeCashFlows(text) {
   return result
 }
 
-// ── 포맷 11: 키움 국내선물옵션 월별손익현황 (붙여넣기, 헤더 2줄+데이터 2줄=1건) ──
-// 컬럼: 월 · 월말예탁자산 · 입금/출금 · 선물매매금/옵션매매금 · 선물매매손익/옵션매매손익 · 옵션미결제평가손익 · 수수료 · 투자평잔 · 월손익 · 매매수익률 · 누적손익
-// 브로커가 주는 "월손익"은 옵션미결제(미실현) 평가손익까지 포함돼있어서 안 씀 —
-// 실제 월손익 = 옵션매매손익(2번째줄) - 수수료(1번째줄). 0인 달은 제외
-export function parseKiwoomKrOptionMonthlyProfit(text) {
-  const lines = text.trim().split('\n').map(l => l.split('\t'))
-  const headerA = lines.findIndex(c => c[0]?.trim() === '월')
-  if (headerA === -1 || headerA + 1 >= lines.length) return []
-  const headerB = headerA + 1
-
-  const idxA = name => lines[headerA].findIndex(c => c.trim() === name)
-  const idxB = name => lines[headerB].findIndex(c => c.trim() === name)
-  const cDate = idxA('월'), cFee = idxA('수수료'), cOptProfit = idxB('옵션매매손익')
-
-  const result = []
-  for (let i = headerB + 1; i + 1 < lines.length; i += 2) {
-    const lineA = lines[i], lineB = lines[i + 1]
-    const dateRaw = lineA[cDate]?.trim()
-    if (!/^\d{4}\/\d{2}$/.test(dateRaw || '')) continue
-    const profit = cleanNumber(lineB[cOptProfit]) - cleanNumber(lineA[cFee])
-    if (!profit) continue
-    result.push({ month: dateRaw.replace('/', '-'), profit, currency: 'KRW' })
-  }
-  return result
-}
-
-// ── 포맷 12: 키움 해외선물옵션 월별손익현황 (붙여넣기, 레코드당 1줄) ──
-// 컬럼: 월 · 통화 · 예수금 · 원화대용금 · 옵션평가차금(전일) · 청산손익 · 수수료 · 월별손익 · 누적손익 · 수익률
-// 월별손익만 필요 — 0인 달은 제외. 외화 금액은 그대로 반환(환산은 호출측에서 처리)
-export function parseKiwoomUsOptionMonthlyProfit(text) {
-  const lines = text.trim().split('\n').map(l => l.split('\t'))
-  const headerA = lines.findIndex(c => c[0]?.trim() === '월')
-  if (headerA === -1) return []
-
-  const idx = name => lines[headerA].findIndex(c => c.trim() === name)
-  const cDate = idx('월'), cCrnc = idx('통화'), cProfit = idx('월별손익')
-
-  const result = []
-  for (let i = headerA + 1; i < lines.length; i++) {
-    const cols = lines[i]
-    const dateRaw = cols[cDate]?.trim()
-    if (!/^\d{4}\/\d{2}$/.test(dateRaw || '')) continue
-    const profit = cleanNumber(cols[cProfit])
-    if (!profit) continue
-    result.push({ month: dateRaw.replace('/', '-'), profitForeign: profit, currency: cols[cCrnc]?.trim() || 'USD' })
-  }
-  return result
-}
-
 // ── 포맷 6: 키움 해외 예수금 ────────────────────────────────
 // 비정형: "원화환산추정인출가능금" 행, 헤더에서 "D+2" 컬럼 위치 파악
 export function parseKiwoomUsCash(text) {

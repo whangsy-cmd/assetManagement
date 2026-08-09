@@ -169,7 +169,7 @@ export default function SectorManager() {
 }
 
 const styles = {
-  container: { maxWidth: 900, margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   loading: { color: '#94a3b8', padding: 40, textAlign: 'center' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, marginBottom: 16 },
   toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12 },

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
+import AccountEvalChart from '../components/AccountEvalChart'
+import { buildAccountEvalRows, buildLoanEvalRow, LOAN_ACCOUNT_ID } from '../utils/holdingsAgg'
 import {
-  getAllHoldings, getAllCash, getAllSnapshots, saveAccountEval, getAllAccountEval,
+  getAllHoldings, getAllCash, getAllSnapshots, saveAccountEval, getAllAccountEval, getLoans,
   deleteCollectionData, deleteAccountData, deleteDocument,
 } from '../utils/firestore'
 
@@ -10,68 +11,10 @@ const PENSION_MIGRATE_ACCOUNT_ID = '000-0000-0000'
 const PENSION_MIGRATE_BEFORE = '2026-05-10' // 이 날짜 이전 스냅샷만 이전 (계좌 분리 전 연금 데이터)
 const PENSION_FILL_UNTIL = '2026-05-01' // 금요일 공백 보정은 이 날짜까지만
 const CHART_START_DATE = '2025-02-07'
-const CHART_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16']
 
 function fmt(n) {
   if (n === undefined || n === null) return '-'
   return Number(n).toLocaleString()
-}
-
-// Y축/툴팁용 축약 표기 (억/만)
-function fmtAbbrev(n) {
-  if (n === undefined || n === null) return '-'
-  const abs = Math.abs(n), sign = n < 0 ? '-' : ''
-  if (abs >= 1e8) return sign + (abs / 1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '억'
-  if (abs >= 1e4) return sign + Math.round(abs / 1e4).toLocaleString() + '만'
-  return n.toLocaleString()
-}
-
-// 차트 스택 순서 (아래→위): 옵션계좌 2개 → 연금 등 나머지(계좌번호순) → 키움국내 → 키움해외
-const CHART_OPTION_ACCOUNTS = new Set(['1611-0027', '5767-2099'])
-const CHART_KIWOOM_KR_STOCK = '3058-4099'
-const CHART_KIWOOM_US_STOCK = '5124-4860'
-
-function chartAccountRank(accountId) {
-  if (CHART_OPTION_ACCOUNTS.has(accountId)) return 0
-  if (accountId === CHART_KIWOOM_KR_STOCK) return 2
-  if (accountId === CHART_KIWOOM_US_STOCK) return 3
-  return 1
-}
-
-// 계좌별 총액(totalAmt)을 날짜 기준으로 피벗해 스택 영역 차트 데이터 생성
-// 예탁금 없거나 0인 (날짜,계좌)는 제외 — 해당 계좌는 그 날 그래프에 표시 안 함
-function buildChartData(rows) {
-  const filtered = rows.filter(r => r.date >= CHART_START_DATE && r.totalAmt)
-  const accountIds = [...new Set(filtered.map(r => r.accountId))]
-    .sort((a, b) => chartAccountRank(a) - chartAccountRank(b) || a.localeCompare(b))
-  const byDateAccount = new Map()
-  for (const r of filtered) byDateAccount.set(`${r.date}_${r.accountId}`, r.totalAmt)
-  const dates = [...new Set(filtered.map(r => r.date))].sort()
-  const data = dates.map(date => {
-    const point = { date }
-    for (const accountId of accountIds) {
-      const v = byDateAccount.get(`${date}_${accountId}`)
-      if (v) point[accountId] = v
-    }
-    return point
-  })
-  return { data, accountIds }
-}
-
-function AccountEvalTooltip({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null
-  const total = payload.reduce((sum, p) => sum + (p.value || 0), 0)
-  return (
-    <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
-      <p style={{ color: '#94a3b8', marginBottom: 4 }}>{label}</p>
-      {payload.filter(p => p.value).map(p => (
-        <p key={p.dataKey} style={{ color: p.color, margin: '2px 0' }}>{p.dataKey}: {p.value.toLocaleString()}원</p>
-      ))}
-      <p style={{ color: '#f1f5f9', borderTop: '1px solid #334155', marginTop: 4, paddingTop: 4, fontWeight: 600 }}>
-        합계: {total.toLocaleString()}원
-      </p>
-    </div>
-  )
 }
 
 function isWeekend(dateStr) {
@@ -89,28 +32,6 @@ function toPreviousFriday(dateStr) {
   const day = d.getUTCDay()
   d.setUTCDate(d.getUTCDate() - (day === 0 ? 2 : 1))
   return d.toISOString().slice(0, 10)
-}
-
-// holdings+cash를 date_accountId 기준으로 합산해 계좌별 평가 행 생성
-function buildRows(holdings, cash) {
-  const evalByKey = new Map()
-  for (const h of holdings) {
-    const key = `${h.date}_${h.accountId}`
-    evalByKey.set(key, (evalByKey.get(key) || 0) + (h.evalAmt || 0))
-  }
-  const rows = []
-  for (const c of cash) {
-    const key = `${c.date}_${c.accountId}`
-    const evalAmt = evalByKey.get(key) || 0
-    rows.push({
-      date: c.date,
-      accountId: c.accountId,
-      evalAmt,
-      cashAmt: c.amount || 0,
-      totalAmt: evalAmt + (c.amount || 0),
-    })
-  }
-  return rows.sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
 }
 
 export default function AccountEvalMigration() {
@@ -135,7 +56,7 @@ export default function AccountEvalMigration() {
     setError('')
     try {
       const [holdings, cash] = await Promise.all([getAllHoldings(user.uid), getAllCash(user.uid)])
-      const built = buildRows(holdings, cash)
+      const built = buildAccountEvalRows(holdings, cash)
       await saveAccountEval(user.uid, built)
       await load()
     } catch (e) {
@@ -183,6 +104,25 @@ export default function AccountEvalMigration() {
       await load()
     } catch (e) {
       setError('연금 이전 오류: ' + e.message)
+    }
+    setGenerating(false)
+  }
+
+  const handleAddLoanToAll = async () => {
+    const uniqueDates = [...new Set(rows.map(r => r.date))]
+    if (!uniqueDates.length) { alert('계좌별평가 데이터가 없습니다.'); return }
+    const loans = await getLoans(user.uid)
+    const totalLoan = loans.reduce((s, l) => s + (l.amount || 0), 0)
+    if (!totalLoan) { alert('등록된 대출금이 없습니다.'); return }
+    if (!confirm(`전체 ${uniqueDates.length}개 날짜에 현재 대출금 합계 ${totalLoan.toLocaleString()}원을 일괄 등록할까요?\n대출금은 날짜별 이력이 없어 현재값을 모든 날짜에 동일하게 적용합니다.`)) return
+    setGenerating(true)
+    setError('')
+    try {
+      const loanRows = uniqueDates.map(date => buildLoanEvalRow(date, loans)).filter(Boolean)
+      await saveAccountEval(user.uid, loanRows)
+      await load()
+    } catch (e) {
+      setError('대출금 추가 오류: ' + e.message)
     }
     setGenerating(false)
   }
@@ -242,8 +182,6 @@ export default function AccountEvalMigration() {
   const accountIds = [...new Set(rows.map(r => r.accountId))].sort()
   const filtered = selectedAccount === '전체' ? rows : rows.filter(r => r.accountId === selectedAccount)
 
-  const { data: chartData, accountIds: chartAccountIds } = buildChartData(rows)
-
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>계좌별 평가 테이블 생성</h2>
@@ -252,42 +190,11 @@ export default function AccountEvalMigration() {
         기존 데이터를 다시 생성하면 같은 날짜·계좌 조합은 덮어씁니다.
       </p>
 
-      {chartData.length > 0 && (
-        <div style={styles.chartCard}>
-          <div style={styles.chartHeader}>
-            <h3 style={styles.chartTitle}>총자산 변동 추이 (계좌별, {CHART_START_DATE}~)</h3>
-            <div style={styles.legend}>
-              {chartAccountIds.map((id, i) => (
-                <span key={id} style={styles.legendItem}>
-                  <span style={{ ...styles.legendDot, background: CHART_COLORS[i % CHART_COLORS.length] }} />{id}
-                </span>
-              ))}
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={d => d.slice(5)} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={fmtAbbrev} width={60} />
-              <Tooltip content={<AccountEvalTooltip />} />
-              {chartAccountIds.map((id, i) => (
-                <Area
-                  key={id}
-                  type="monotone"
-                  dataKey={id}
-                  stackId="1"
-                  stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                  strokeOpacity={0.5}
-                  fill={CHART_COLORS[i % CHART_COLORS.length]}
-                  fillOpacity={0.5}
-                  strokeWidth={1}
-                  dot={false}
-                />
-              ))}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      <AccountEvalChart
+        rows={rows.filter(r => r.accountId !== LOAN_ACCOUNT_ID)}
+        startDate={CHART_START_DATE}
+        title={`총자산 변동 추이 (계좌별, ${CHART_START_DATE}~)`}
+      />
 
       <div style={styles.toolbar}>
         <button style={styles.genBtn} onClick={handleGenerate} disabled={generating}>
@@ -295,6 +202,9 @@ export default function AccountEvalMigration() {
         </button>
         <button style={styles.pensionBtn} onClick={handleMigratePension} disabled={generating}>
           {generating ? '생성 중...' : `연금 스냅샷 이전 (~${PENSION_MIGRATE_BEFORE} 이전 → ${PENSION_MIGRATE_ACCOUNT_ID})`}
+        </button>
+        <button style={styles.pensionBtn} onClick={handleAddLoanToAll} disabled={generating}>
+          {generating ? '처리 중...' : '기존 자료에 대출금 추가'}
         </button>
         <button style={styles.pensionBtn} onClick={handleFixWeekendDates} disabled={generating}>
           {generating ? '처리 중...' : '주말 날짜 → 직전 금요일 수정'}
@@ -353,16 +263,10 @@ export default function AccountEvalMigration() {
 }
 
 const styles = {
-  container: { maxWidth: 1100, margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, margin: 0 },
   desc: { color: '#64748b', fontSize: 13, margin: '8px 0 20px', lineHeight: 1.6 },
   code: { background: '#1e293b', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace' },
-  chartCard: { background: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 16 },
-  chartHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' },
-  chartTitle: { color: '#f1f5f9', fontSize: 15, fontWeight: 700, margin: 0 },
-  legend: { display: 'flex', gap: 12, flexWrap: 'wrap' },
-  legendItem: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#94a3b8' },
-  legendDot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
   toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' },
   genBtn: { background: '#22c55e', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontWeight: 700, fontSize: 14 },
   pensionBtn: { background: 'transparent', color: '#a78bfa', border: '1px solid #6d28d9', borderRadius: 8, padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13 },

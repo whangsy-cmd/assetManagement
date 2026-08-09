@@ -6,7 +6,6 @@ import {
   parseKiwoomKrHoldings, parseKiwoomKrCash,
   parseKiwoomUsHoldings, parseKiwoomUsCash, parseKiwoomUsCashFlows,
   parseKiwoomKrFuturesCashFlows, parseKiwoomUsFuturesCashFlows,
-  parseKiwoomKrOptionMonthlyProfit, parseKiwoomUsOptionMonthlyProfit,
 } from '../utils/parsers'
 import {
   fetchKrHoldings, fetchKrCash, fetchUsLedger, fetchUsCashDetail,
@@ -14,10 +13,10 @@ import {
   fetchKrCashFlows, transformKrCashFlows,
 } from '../utils/kiwoomApi'
 import { getUsdKrwRate } from '../utils/exchangeRate'
+import { buildAccountEvalRows, buildLoanEvalRow } from '../utils/holdingsAgg'
 import {
-  saveHoldings, saveCash, ensureSectors, createSnapshot, getSectors,
+  saveHoldings, saveCash, ensureSectors, saveAccountEval, getSectors, getLoans,
   saveCashFlows, getLastCashFlowDate,
-  saveOptionMonthlyProfit, getLastOptionMonth,
 } from '../utils/firestore'
 
 const TODAY = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -143,22 +142,6 @@ async function convertOptionRowsToKrw(rows) {
   return out
 }
 
-// 해외선물옵션 월별손익 — 월말일 환율로 KRW 환산
-function lastDayOfMonthISO(month) {
-  const [y, m] = month.split('-').map(Number)
-  return new Date(y, m, 0).toISOString().slice(0, 10)
-}
-async function convertOptionProfitRowsToKrw(rows) {
-  const out = []
-  for (const r of rows) {
-    if (r.currency === 'KRW') { out.push(r); continue }
-    const rate = await getUsdKrwRate(lastDayOfMonthISO(r.month))
-    const { profitForeign, currency: _drop, ...rest } = r
-    out.push({ ...rest, profit: Math.round(profitForeign * rate), currency: 'KRW' })
-  }
-  return out
-}
-
 // ── 붙여넣기 기반 입출금내역 카드 (해외 계좌 / 선물옵션 계좌 공용) ──
 function PasteCashFlowCard({ title, account, missingMsg, broker, parseFn, placeholder, transform }) {
   const { user } = useAuth()
@@ -269,122 +252,6 @@ function PasteCashFlowCard({ title, account, missingMsg, broker, parseFn, placeh
                     <td style={styles.td}>{r.currency}</td>
                     <td style={styles.td}>{r.memo}</td>
                     <td style={styles.td}>{r.balance !== undefined ? r.balance.toLocaleString() : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button style={{ ...styles.apiBtn, marginTop: 14 }} onClick={handleSave} disabled={saving}>
-            {saving ? '등록 중...' : '등록'}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── 옵션계좌 월별손익 직접입력 카드 (브로커 제공 월손익현황 붙여넣기, 입출금내역과 별도 저장) ──
-function PasteOptionProfitCard({ title, account, missingMsg, broker, parseFn, placeholder, transform }) {
-  const { user } = useAuth()
-  const accountId = account?.accountId || ''
-  const [lastMonth, setLastMonth] = useState(undefined)
-  const [text, setText] = useState('')
-  const [rows, setRows] = useState(null)
-  const [error, setError] = useState('')
-  const [parsing, setParsing] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [savedMsg, setSavedMsg] = useState('')
-
-  useEffect(() => {
-    if (!accountId) return
-    getLastOptionMonth(user.uid, accountId).then(setLastMonth)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId])
-
-  const parseText = async (rawText) => {
-    setError('')
-    setSavedMsg('')
-    let parsed = parseFn(rawText).map(r => ({ ...r, accountId, broker }))
-    if (!parsed.length) { setError('파싱 결과가 없습니다. 화면 전체를 복사했는지 확인하세요.'); return }
-    if (transform) {
-      setParsing(true)
-      try {
-        parsed = await transform(parsed)
-      } catch (e) {
-        setError('환율 조회 오류: ' + e.message)
-        setParsing(false)
-        return
-      }
-      setParsing(false)
-    }
-    setRows(parsed)
-  }
-
-  const handlePaste = (e) => {
-    const rawText = e.clipboardData.getData('text')
-    if (!rawText.trim()) return
-    setTimeout(() => parseText(rawText), 0)
-  }
-
-  const handleSave = async () => {
-    if (!rows || !rows.length) return
-    setSaving(true)
-    setError('')
-    try {
-      await saveOptionMonthlyProfit(user.uid, rows)
-      setSavedMsg(`✅ ${rows.length}건 등록 완료`)
-      setRows(null)
-      setText('')
-      setLastMonth(await getLastOptionMonth(user.uid, accountId))
-    } catch (e) {
-      setError('저장 오류: ' + e.message)
-    }
-    setSaving(false)
-  }
-
-  return (
-    <div style={styles.cfCard}>
-      <div style={styles.cfHeadRow}>
-        <h3 style={{ ...styles.stepLabel, marginBottom: 0 }}>{title}</h3>
-        {account
-          ? <span style={styles.cfAccountInline}>{account.name} ({account.accountId}){lastMonth !== undefined && ` · ${lastMonth ? `마지막 ${lastMonth}` : '저장 내역 없음'}`}</span>
-          : <span style={{ color: '#f87171', fontSize: 13 }}>⚠️ {missingMsg}</span>
-        }
-      </div>
-
-      {accountId && (
-        <>
-          <textarea
-            style={styles.textarea}
-            value={text}
-            onChange={e => { setText(e.target.value); setRows(null); setError('') }}
-            onPaste={handlePaste}
-            placeholder={placeholder}
-            rows={4}
-          />
-
-          {parsing && <p style={{ color: '#94a3b8', fontSize: 13 }}>환율 조회 중...</p>}
-          {error && <p style={styles.error}>{error}</p>}
-          {savedMsg && <p style={{ color: '#4ade80', fontSize: 13 }}>{savedMsg}</p>}
-        </>
-      )}
-
-      {rows && (
-        <div style={styles.preview}>
-          <p style={styles.previewTitle}>조회 결과 — {rows.length}건</p>
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>월</th>
-                  <th style={styles.th}>월손익</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i}>
-                    <td style={styles.td}>{r.month}</td>
-                    <td style={styles.td}>{r.profit.toLocaleString()}원</td>
                   </tr>
                 ))}
               </tbody>
@@ -680,6 +547,8 @@ export default function DataInput() {
     setSaving(true)
     setError('')
     try {
+      const holdingsForDate = []
+      const cashForDate = []
       for (let i = 0; i < STEPS.length; i++) {
         const s = STEPS[i]
         const data = buffer[i]
@@ -687,12 +556,16 @@ export default function DataInput() {
         if (s.kind === 'holdings') {
           await saveHoldings(user.uid, date, data)
           await ensureSectors(user.uid, data)
+          holdingsForDate.push(...data.map(r => ({ ...r, date })))
         } else {
           await saveCash(user.uid, date, data)
+          cashForDate.push(...data.map(r => ({ ...r, date })))
         }
       }
-      await createSnapshot(user.uid, date)
-      alert('✅ 저장 및 스냅샷 생성 완료!')
+      const evalRows = buildAccountEvalRows(holdingsForDate, cashForDate)
+      const loanRow = buildLoanEvalRow(date, await getLoans(user.uid))
+      await saveAccountEval(user.uid, loanRow ? [...evalRows, loanRow] : evalRows)
+      alert('✅ 저장 및 계좌별 평가 등록 완료!')
       setStep(4); setDone([]); setAllDone(false)
       setBuffer({}); setText(''); setParsed(null); setAwaitingCodes(null); setRawByStep({}); setShowRaw(false)
     } catch (e) {
@@ -739,10 +612,10 @@ export default function DataInput() {
       {allDone ? (
         <div style={styles.allDoneCard}>
           <p style={styles.allDoneTitle}>✅ 6개 항목 파싱 완료</p>
-          <p style={styles.allDoneDesc}>아래 버튼을 누르면 전체 데이터를 저장하고 스냅샷을 생성합니다.</p>
+          <p style={styles.allDoneDesc}>아래 버튼을 누르면 전체 데이터를 저장하고 계좌별 평가 테이블에 등록합니다.</p>
           {error && <p style={styles.error}>{error}</p>}
           <button style={styles.snapshotBtn} onClick={handleSaveAndSnapshot} disabled={saving}>
-            {saving ? '저장 중...' : '저장 + 스냅샷 생성'}
+            {saving ? '저장 중...' : '저장 + 계좌별평가 등록'}
           </button>
         </div>
       ) : (
@@ -957,33 +830,12 @@ export default function DataInput() {
         parseFn={parseMiraeCashFlows}
         placeholder="이체내역 화면 Ctrl+A → Ctrl+C → 여기에 Ctrl+V"
       />
-
-      {/* 옵션계좌 월별손익 직접입력 — 입출금내역과 별도 저장, 브로커 제공 월손익현황 그대로 사용 */}
-      <PasteOptionProfitCard
-        key={`kr-futures-profit-${krFuturesAccountId}`}
-        title="키움 국내 선물옵션 월별손익"
-        account={krFuturesAccount}
-        missingMsg='계좌 관리에서 이름이 "선물옵션"인 키움 국내 계좌를 먼저 등록하세요'
-        broker="kiwoom_kr_futures"
-        parseFn={parseKiwoomKrOptionMonthlyProfit}
-        placeholder="월별손익현황 화면 Ctrl+A → Ctrl+C → 여기에 Ctrl+V"
-      />
-      <PasteOptionProfitCard
-        key={`us-futures-profit-${usFuturesAccountId}`}
-        title="키움 해외 선물옵션 월별손익"
-        account={usFuturesAccount}
-        missingMsg='계좌 관리에서 이름이 "선물옵션"인 키움 해외 계좌를 먼저 등록하세요'
-        broker="kiwoom_us_futures"
-        parseFn={parseKiwoomUsOptionMonthlyProfit}
-        transform={convertOptionProfitRowsToKrw}
-        placeholder="월별손익현황 화면 Ctrl+A → Ctrl+C → 여기에 Ctrl+V"
-      />
     </div>
   )
 }
 
 const styles = {
-  container: { maxWidth: 900, margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, marginBottom: 20 },
   dateRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 },
   dateInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', color: '#f1f5f9', fontSize: 14 },

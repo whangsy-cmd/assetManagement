@@ -3,12 +3,12 @@ import * as XLSX from 'xlsx'
 import { useAuth } from '../contexts/AuthContext'
 import { useAccounts } from '../hooks/useAccounts'
 import {
-  getAllHoldings, getAllCash, getAllSnapshots, getAllCashFlows,
+  getAllHoldings, getAllCashFlows, getAllAccountEval,
   deleteDateData, deleteAccountData, deleteCollectionData, countCollection, getAllDocsRaw,
 } from '../utils/firestore'
-import { buildStockSeries } from '../utils/holdingsAgg'
+import { buildStockSeries, getAccountCategory, LOAN_ACCOUNT_ID } from '../utils/holdingsAgg'
 
-const TABS = ['보유종목', '계좌별 평가', '스냅샷', '입출금내역', '종목별 조회']
+const TABS = ['보유종목', '일자별 계좌', '계좌별 조회', '계좌통합 조회', '입출금내역', '종목별 조회']
 
 // 백업 대상 컬렉션. settings(키움 API 키 등 시크릿 포함)는 의도적으로 제외.
 const BACKUP_COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance']
@@ -135,7 +135,7 @@ function HoldingsTab() {
   }
 
   const handleExport = async () => {
-    const cashData = await getAllCash(user.uid)
+    const evalData = await getAllAccountEval(user.uid)
     const holdingRows = data.map(r => ({
       날짜: r.date,
       계좌: r.accountId,
@@ -147,14 +147,14 @@ function HoldingsTab() {
       평가손익: r.gainLoss,
       '수익률(%)': Number(r.returnRate).toFixed(2),
     }))
-    const cashRows = cashData.map(r => ({
+    const cashRows = evalData.filter(r => r.accountId !== LOAN_ACCOUNT_ID).map(r => ({
       날짜: r.date,
       계좌: r.accountId,
       종목명: '예수금',
       코드: '',
       수량: '',
       매입금액: '',
-      평가금액: r.amount,
+      평가금액: r.cashAmt,
       평가손익: '',
       '수익률(%)': '',
     }))
@@ -239,16 +239,14 @@ function HoldingsTab() {
 function CashTab() {
   const { user } = useAuth()
   const [data, setData] = useState([])
-  const [holdings, setHoldings] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState('')
 
   const load = async () => {
     setLoading(true)
-    const [rows, holdingRows] = await Promise.all([getAllCash(user.uid), getAllHoldings(user.uid)])
+    const rows = await getAllAccountEval(user.uid)
     setData(rows)
-    setHoldings(holdingRows)
-    if (rows.length && !selectedDate) setSelectedDate(rows[0].date)
+    if (rows.length && !selectedDate) setSelectedDate([...new Set(rows.map(d => d.date))].sort().at(-1))
     setLoading(false)
   }
 
@@ -257,31 +255,24 @@ function CashTab() {
   const dates = [...new Set(data.map(d => d.date))].sort().reverse()
   const filtered = data.filter(d => d.date === selectedDate)
 
-  const evalAmtByAccount = new Map()
-  for (const h of holdings) {
-    const key = `${h.date}_${h.accountId}`
-    evalAmtByAccount.set(key, (evalAmtByAccount.get(key) || 0) + (h.evalAmt || 0))
-  }
-  const evalAmtOf = row => evalAmtByAccount.get(`${row.date}_${row.accountId}`) || 0
-
   const handleExport = () => {
     const rows = [...data].sort((a, b) =>
       b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId)
     ).map(r => ({
       날짜: r.date,
       계좌: r.accountId,
-      종목평가금액: evalAmtOf(r),
-      예수금: r.amount,
-      총액: evalAmtOf(r) + r.amount,
+      종목평가금액: r.evalAmt,
+      예수금: r.cashAmt,
+      총액: r.totalAmt,
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '계좌별평가')
-    XLSX.writeFile(wb, '계좌별평가_전체.xlsx')
+    XLSX.utils.book_append_sheet(wb, ws, '일자별계좌')
+    XLSX.writeFile(wb, '일자별계좌_전체.xlsx')
   }
 
   if (loading) return <div style={styles.loading}>로딩 중...</div>
-  if (!data.length) return <div style={styles.empty}>저장된 예수금 데이터가 없습니다.</div>
+  if (!data.length) return <div style={styles.empty}>저장된 계좌별평가 데이터가 없습니다.</div>
 
   return (
     <div>
@@ -311,9 +302,9 @@ function CashTab() {
             {filtered.map(row => (
               <tr key={row.docId} style={styles.tr}>
                 <td style={styles.td}>{row.accountId}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(evalAmtOf(row))}원</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.amount)}원</td>
-                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>{fmt(evalAmtOf(row) + row.amount)}원</td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.evalAmt)}원</td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.cashAmt)}원</td>
+                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>{fmt(row.totalAmt)}원</td>
               </tr>
             ))}
           </tbody>
@@ -323,18 +314,97 @@ function CashTab() {
   )
 }
 
-// ── 스냅샷 탭 ───────────────────────────────────────────────
-function SnapshotsTab() {
+// ── 계좌별 조회 탭 (계좌별평가 테이블 원본 조회) ────────────────
+function AccountEvalTab() {
   const { user } = useAuth()
   const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selectedAccount, setSelectedAccount] = useState('전체')
+
+  useEffect(() => {
+    setLoading(true)
+    getAllAccountEval(user.uid).then(rows => { setData(rows); setLoading(false) })
+  }, [])
+
+  const accountIds = [...new Set(data.map(d => d.accountId))].sort()
+  const filtered = selectedAccount === '전체' ? data : data.filter(d => d.accountId === selectedAccount)
+  const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
+
+  const handleExport = () => {
+    const rows = sorted.map(r => ({
+      날짜: r.date,
+      계좌: r.accountId,
+      종목평가금액: r.evalAmt,
+      예수금: r.cashAmt,
+      총액: r.totalAmt,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '계좌별조회')
+    XLSX.writeFile(wb, `계좌별조회_${selectedAccount}.xlsx`)
+  }
+
+  if (loading) return <div style={styles.loading}>로딩 중...</div>
+  if (!data.length) return <div style={styles.empty}>저장된 계좌별평가 데이터가 없습니다.</div>
+
+  return (
+    <div>
+      <div style={styles.toolbar}>
+        <div style={styles.dateRow}>
+          <span style={styles.toolLabel}>계좌 선택</span>
+          <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)} style={styles.stockSelect}>
+            <option value="전체">전체</option>
+            {accountIds.map(id => <option key={id} value={id}>{id}</option>)}
+          </select>
+        </div>
+        <div style={styles.toolRight}>
+          <button style={styles.exportBtn} onClick={handleExport}>
+            데이터 엑셀 다운로드
+          </button>
+        </div>
+      </div>
+
+      <div style={styles.tableWrap}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>날짜</th>
+              <th style={styles.th}>계좌</th>
+              <th style={styles.th}>종목평가금액</th>
+              <th style={styles.th}>예수금</th>
+              <th style={styles.th}>총액</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(row => (
+              <tr key={row.docId} style={styles.tr}>
+                <td style={styles.td}>{row.date}</td>
+                <td style={styles.td}>{row.accountId}</td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.evalAmt)}원</td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.cashAmt)}원</td>
+                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>{fmt(row.totalAmt)}원</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── 계좌통합 조회 탭 (계좌별평가를 일자별로 합산) ───────────────
+function SnapshotsTab() {
+  const { user } = useAuth()
+  const { accounts } = useAccounts()
+  const [accountEval, setAccountEval] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const load = async () => {
     setLoading(true)
     setLoadError('')
     try {
-      const rows = await getAllSnapshots(user.uid)
-      setData(rows)
+      const rows = await getAllAccountEval(user.uid)
+      setAccountEval(rows)
     } catch (e) {
       setLoadError('데이터 로드 오류: ' + e.message)
     }
@@ -343,32 +413,79 @@ function SnapshotsTab() {
 
   useEffect(() => { load() }, [])
 
-  const sorted = [...data].sort((a, b) => b.date.localeCompare(a.date))
+  const accCatMap = Object.fromEntries(accounts.map(a => [a.accountId, a.category]))
+  const evalRows = accountEval.filter(r => r.accountId !== LOAN_ACCOUNT_ID)
+  const loanRows = accountEval.filter(r => r.accountId === LOAN_ACCOUNT_ID)
+
+  const rowsByAccount = new Map()
+  for (const r of evalRows) {
+    if (!rowsByAccount.has(r.accountId)) rowsByAccount.set(r.accountId, [])
+    rowsByAccount.get(r.accountId).push(r)
+  }
+  for (const arr of rowsByAccount.values()) arr.sort((a, b) => a.date.localeCompare(b.date))
+
+  const loanByDate = new Map(loanRows.map(r => [r.date, -(r.totalAmt || 0)]))
+  const loanDates = [...loanByDate.keys()].sort()
+  const loanAsOf = date => {
+    let v = 0
+    for (const d of loanDates) { if (d > date) break; v = loanByDate.get(d) }
+    return v
+  }
+
+  // 계좌마다 갱신 주기가 달라도(선물옵션 등) 각 계좌의 asOfDate 이하 최신값을 이월해서 합산
+  function categorySumsAsOf(asOfDate) {
+    const sums = { pension: 0, domestic: 0, overseas: 0 }
+    for (const [accountId, arr] of rowsByAccount) {
+      let latestRow = null
+      for (const r of arr) { if (r.date > asOfDate) break; latestRow = r }
+      if (!latestRow) continue
+      sums[getAccountCategory(accountId, accCatMap)] += latestRow.totalAmt || 0
+    }
+    return sums
+  }
+
+  const evalDates = [...new Set(evalRows.map(r => r.date))].sort()
+  const summary = evalDates.map(date => {
+    const s = categorySumsAsOf(date)
+    const totalBalance = s.pension + s.domestic + s.overseas
+    const totalLoan = loanAsOf(date)
+    return { date, domestic: s.domestic, overseas: s.overseas, pension: s.pension, totalBalance, totalLoan, netBalance: totalBalance - totalLoan }
+  })
+  for (let i = 0; i < summary.length; i++) {
+    const prev = i > 0 ? summary[i - 1] : null
+    summary[i].domesticChange = prev ? summary[i].domestic - prev.domestic : 0
+    summary[i].overseasChange = prev ? summary[i].overseas - prev.overseas : 0
+    summary[i].pensionChange = prev ? summary[i].pension - prev.pension : 0
+    summary[i].totalChange = prev ? summary[i].totalBalance - prev.totalBalance : 0
+    summary[i].totalChangeRate = prev && prev.totalBalance ? (summary[i].totalChange / prev.totalBalance) * 100 : 0
+  }
+
+  const sorted = [...summary].sort((a, b) => b.date.localeCompare(a.date))
 
   const handleExport = () => {
     const rows = sorted.map(r => ({
       날짜: r.date,
-      국내: r.domestic?.balance,
-      국내증감: r.domestic?.change,
-      해외: r.overseas?.balance,
-      해외증감: r.overseas?.change,
-      연금: r.pension?.balance,
-      연금증감: r.pension?.change,
-      총잔액: r.totalBalance ?? r.netBalance,
+      국내: r.domestic,
+      국내증감: r.domesticChange,
+      해외: r.overseas,
+      해외증감: r.overseasChange,
+      연금: r.pension,
+      연금증감: r.pensionChange,
+      총잔액: r.totalBalance,
       총증감: r.totalChange,
       '증가율(%)': Number(r.totalChangeRate ?? 0).toFixed(2),
       대출금: r.totalLoan,
-      순자산: r.netBalance ?? r.totalBalance,
+      순자산: r.netBalance,
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '스냅샷')
-    XLSX.writeFile(wb, '스냅샷_전체.xlsx')
+    XLSX.utils.book_append_sheet(wb, ws, '계좌통합조회')
+    XLSX.writeFile(wb, '계좌통합조회_전체.xlsx')
   }
 
   if (loading) return <div style={styles.loading}>로딩 중...</div>
   if (loadError) return <div style={{ color: '#f87171', padding: 20, fontSize: 13 }}>{loadError}<br /><button style={{ marginTop: 10, ...styles.rowDel }} onClick={load}>재시도</button></div>
-  if (!data.length) return <div style={styles.empty}>저장된 스냅샷이 없습니다.</div>
+  if (!sorted.length) return <div style={styles.empty}>저장된 계좌별평가 데이터가 없습니다.</div>
 
   return (
     <div>
@@ -397,19 +514,19 @@ function SnapshotsTab() {
           </thead>
           <tbody>
             {sorted.map(row => (
-              <tr key={row.docId} style={styles.tr}>
+              <tr key={row.date} style={styles.tr}>
                 <td style={styles.td}>{row.date}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.domestic?.balance)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: (row.domestic?.change ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.domestic?.change)}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.overseas?.balance)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: (row.overseas?.change ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.overseas?.change)}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.pension?.balance)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: (row.pension?.change ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.pension?.change)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>{fmt(row.totalBalance ?? row.netBalance)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: (row.totalChange ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.totalChange)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: (row.totalChangeRate ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.totalChangeRate ?? 0).toFixed(2)}%</td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.domestic)}</td>
+                <td style={{ ...styles.td, textAlign: 'right', color: row.domesticChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.domesticChange)}</td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.overseas)}</td>
+                <td style={{ ...styles.td, textAlign: 'right', color: row.overseasChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.overseasChange)}</td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.pension)}</td>
+                <td style={{ ...styles.td, textAlign: 'right', color: row.pensionChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.pensionChange)}</td>
+                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>{fmt(row.totalBalance)}</td>
+                <td style={{ ...styles.td, textAlign: 'right', color: row.totalChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.totalChange)}</td>
+                <td style={{ ...styles.td, textAlign: 'right', color: row.totalChangeRate >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.totalChangeRate ?? 0).toFixed(2)}%</td>
                 <td style={{ ...styles.td, textAlign: 'right', color: '#f87171' }}>{row.totalLoan > 0 ? fmt(row.totalLoan) : '-'}</td>
-                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600, color: '#a78bfa' }}>{fmt(row.netBalance ?? row.totalBalance)}</td>
+                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600, color: '#a78bfa' }}>{fmt(row.netBalance)}</td>
               </tr>
             ))}
           </tbody>
@@ -796,16 +913,17 @@ export default function DataView() {
       <div style={styles.content}>
         {tab === 0 && <HoldingsTab />}
         {tab === 1 && <CashTab />}
-        {tab === 2 && <SnapshotsTab />}
-        {tab === 3 && <CashFlowsTab />}
-        {tab === 4 && <StockPeriodTab />}
+        {tab === 2 && <AccountEvalTab />}
+        {tab === 3 && <SnapshotsTab />}
+        {tab === 4 && <CashFlowsTab />}
+        {tab === 5 && <StockPeriodTab />}
       </div>
     </div>
   )
 }
 
 const styles = {
-  container: { maxWidth: 1100, margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, margin: 0 },
   headingRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20, flexWrap: 'wrap' },
   backupBtn: { background: 'transparent', color: '#93c5fd', border: '1px solid #1d4ed8', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600 },

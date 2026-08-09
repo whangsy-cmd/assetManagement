@@ -1,11 +1,14 @@
 import { Fragment, useEffect, useState } from 'react'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
-import { getLatestHoldings, getLatestCash, getAccounts, getSnapshots, getSectors, getRebalanceSettings } from '../utils/firestore'
+import { getLatestHoldings, getAccounts, getAllAccountEval, getSectors, getRebalanceSettings, getLoans } from '../utils/firestore'
+import { getAccountCategory, LOAN_ACCOUNT_ID } from '../utils/holdingsAgg'
+import AccountEvalChart from '../components/AccountEvalChart'
 import '../common.css'
 
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16']
 const CAT_LABEL = { pension: '연금', domestic: '국내', overseas: '해외' }
+const DASHBOARD_START_DATE = '2025-02-07' // 그래프/수익률/누적수익 등 전체 계산 시작 기준일
 
 function fmt(n) {
   if (!n && n !== 0) return '-'
@@ -22,29 +25,6 @@ function fmtWon(n) {
 
 function sgn(v) { return v >= 0 ? '+' : '' }
 function pc(v)  { return v >= 0 ? 'pos' : 'neg' }
-
-function NetWorthTooltip({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null
-  const nameMap = { pension: '연금', domestic: '국내', overseas: '해외', loan: '대출' }
-  const net = payload.reduce((sum, p) => sum + (p.value || 0), 0)
-  return (
-    <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
-      <p style={{ color: '#94a3b8', marginBottom: 4 }}>{label}</p>
-      {payload.map(p => {
-        const isLoan = p.dataKey === 'loan'
-        const display = isLoan ? `-${Math.abs(p.value).toLocaleString()}` : p.value.toLocaleString()
-        return (
-          <p key={p.dataKey} style={{ color: p.color, margin: '2px 0' }}>
-            {nameMap[p.dataKey]}: {display}원
-          </p>
-        )
-      })}
-      <p style={{ color: '#f1f5f9', borderTop: '1px solid #334155', marginTop: 4, paddingTop: 4, fontWeight: 600 }}>
-        순자산: {net.toLocaleString()}원
-      </p>
-    </div>
-  )
-}
 
 function makePieLabel(denom) {
   return function({ cx, cy, midAngle, innerRadius, outerRadius, value }) {
@@ -156,9 +136,9 @@ function AggregateTable({ rows }) {
 export default function Dashboard() {
   const { user } = useAuth()
   const [holdings, setHoldings] = useState([])
-  const [cash, setCash] = useState([])
   const [accounts, setAccounts] = useState([])
-  const [snapshots, setSnapshots] = useState([])
+  const [accountEval, setAccountEval] = useState([])
+  const [loans, setLoans] = useState([])
   const [sectors, setSectors] = useState([])
   const [rebalanceSettings, setRebalanceSettings] = useState({})
   const [loading, setLoading] = useState(true)
@@ -168,32 +148,87 @@ export default function Dashboard() {
     if (!user) return
     Promise.all([
       getLatestHoldings(user.uid),
-      getLatestCash(user.uid),
       getAccounts(user.uid),
-      getSnapshots(user.uid, 260),
+      getAllAccountEval(user.uid),
       getSectors(user.uid),
       getRebalanceSettings(user.uid),
-    ]).then(([h, c, acc, s, sec, st]) => {
-      setHoldings(h); setCash(c); setAccounts(acc); setSnapshots(s); setSectors(sec)
+      getLoans(user.uid),
+    ]).then(([h, acc, ae, sec, st, ln]) => {
+      setHoldings(h); setAccounts(acc); setAccountEval(ae); setSectors(sec)
       setRebalanceSettings(st || {})
+      setLoans(ln)
       setLoading(false)
     })
   }, [user])
 
   if (loading) return <div className="loading">로딩 중...</div>
-  if (!snapshots.length) return (
+  if (!accountEval.length) return (
     <div className="empty">
       <p>아직 데이터가 없습니다.</p>
       <p style={{ color: '#64748b', fontSize: 14 }}>데이터 입력 메뉴에서 HTS 데이터를 붙여넣기 하세요.</p>
     </div>
   )
 
-  const latest    = snapshots.at(-1)
-  const weekChange     = latest.totalChange ?? 0
-  const weekChangeRate = latest.totalChangeRate ?? 0
-  const pension  = latest.pension?.balance  || 0
-  const domestic = latest.domestic?.balance || 0
-  const overseas = latest.overseas?.balance || 0
+  const accCatMap  = Object.fromEntries(accounts.map(a => [a.accountId, a.category]))
+
+  // 전 기간 데이터 시작점 고정 — 그래프/수익률/누적수익 등 모든 계산이 이 날짜부터
+  // 대출금(LOAN_ACCOUNT_ID)은 가상 계좌라 자산 집계에서 제외 — 순자산 계산은 아래에서 loans 컬렉션으로 별도 처리
+  const evalRows = accountEval.filter(r => r.date >= DASHBOARD_START_DATE && r.accountId !== LOAN_ACCOUNT_ID)
+
+  // 계좌별평가(accountEval)를 날짜별로 묶고, 계좌별로도 날짜 오름차순 정렬
+  const rowsByDate = new Map()
+  const rowsByAccount = new Map()
+  for (const r of evalRows) {
+    if (!rowsByDate.has(r.date)) rowsByDate.set(r.date, [])
+    rowsByDate.get(r.date).push(r)
+    if (!rowsByAccount.has(r.accountId)) rowsByAccount.set(r.accountId, [])
+    rowsByAccount.get(r.accountId).push(r)
+  }
+  for (const arr of rowsByAccount.values()) arr.sort((a, b) => a.date.localeCompare(b.date))
+  const cashAmtByAccount = new Map([...rowsByAccount].map(([id, arr]) => [id, arr.at(-1)?.cashAmt || 0]))
+  const evalDates = [...rowsByDate.keys()].sort()
+  const latestDate = evalDates.at(-1)
+  const prevDate = evalDates.length > 1 ? evalDates[evalDates.length - 2] : null
+  const firstDate = evalDates[0]
+
+  // 계좌마다 갱신 주기가 달라도(선물옵션 등) 각 계좌의 asOfDate 이하 최신값을 이월해서 합산 — 데이터 있는 계좌만 포함됨
+  function categorySumsAsOf(asOfDate) {
+    const sums = { pension: 0, domestic: 0, overseas: 0 }
+    for (const [accountId, arr] of rowsByAccount) {
+      let latestRow = null
+      for (const r of arr) {
+        if (r.date > asOfDate) break
+        latestRow = r
+      }
+      if (!latestRow) continue
+      sums[getAccountCategory(accountId, accCatMap)] += latestRow.totalAmt || 0
+    }
+    return sums
+  }
+  const latestSums = categorySumsAsOf(latestDate)
+  const prevSums = prevDate ? categorySumsAsOf(prevDate) : latestSums
+  const firstSums = categorySumsAsOf(firstDate)
+  const prevTotal = prevSums.pension + prevSums.domestic + prevSums.overseas
+
+  const totalLoan = loans.reduce((s, l) => s + (l.amount || 0), 0)
+  const totalBalance = latestSums.pension + latestSums.domestic + latestSums.overseas
+
+  const latest = {
+    date: latestDate,
+    totalBalance,
+    totalChange: totalBalance - prevTotal,
+    totalChangeRate: prevTotal > 0 ? (totalBalance - prevTotal) / prevTotal * 100 : 0,
+    totalLoan,
+    netBalance: totalBalance - totalLoan,
+    domestic: { balance: latestSums.domestic, change: latestSums.domestic - prevSums.domestic },
+    overseas: { balance: latestSums.overseas, change: latestSums.overseas - prevSums.overseas },
+    pension:  { balance: latestSums.pension,  change: latestSums.pension  - prevSums.pension },
+  }
+  const weekChange     = latest.totalChange
+  const weekChangeRate = latest.totalChangeRate
+  const pension  = latest.pension.balance
+  const domestic = latest.domestic.balance
+  const overseas = latest.overseas.balance
 
   // 섹터별 집계
   const sectorMap = Object.fromEntries(sectors.map(s => [s.code, s.sector || '미분류']))
@@ -215,8 +250,7 @@ export default function Dashboard() {
   ].filter(d => d.value > 0).sort((a, b) => b.value - a.value)
 
   // 셰넌 리밸런싱 요약 (연금/연금외 독립 — 리밸런싱 페이지에서 저장한 기준 사용, 없으면 기본값). 대출 미반영, 현재 예수금 그대로 계산.
-  const accCatMap  = Object.fromEntries(accounts.map(a => [a.accountId, a.category]))
-  const isPensionAcc = (id) => accCatMap[id] === 'pension'
+  const isPensionAcc = (id) => getAccountCategory(id, accCatMap) === 'pension'
   function shannonSummary(isPool, poolKey) {
     const poolHoldings = holdings.filter(h => isPool(h.accountId))
     const poolSectorAgg = {}
@@ -225,7 +259,7 @@ export default function Dashboard() {
       poolSectorAgg[sec] = (poolSectorAgg[sec] || 0) + (h.evalAmt || 0)
     }
     const stockAmt = Object.values(poolSectorAgg).reduce((a, b) => a + b, 0)
-    const cashAmt = cash.filter(c => isPool(c.accountId)).reduce((s, c) => s + (c.amount || 0), 0)
+    const cashAmt = [...cashAmtByAccount].filter(([id]) => isPool(id)).reduce((s, [, amt]) => s + amt, 0)
     poolSectorAgg['예수금'] = (poolSectorAgg['예수금'] || 0) + cashAmt
     const total = stockAmt + cashAmt || 1
 
@@ -248,31 +282,37 @@ export default function Dashboard() {
     { label: '연금외', ...shannonSummary(id => !isPensionAcc(id), 'other') },
   ]
 
-  // 계좌별 집계
+  // 계좌별 집계 — 평가금액/예수금/총잔액은 계좌별평가(accountEval) 최신 날짜 기준, 매입금액/평가손익은 보유종목(holdings)에서 보충
   const accNameMap = Object.fromEntries(accounts.map(a => [a.accountId, a.name || a.accountId]))
-  const accMap = {}
+  const purchaseByAccount = {}
+  const gainLossByAccount = {}
   for (const h of holdings) {
-    const id = h.accountId
-    if (!accMap[id]) accMap[id] = { accountId: id, category: accCatMap[id] || 'domestic', purchaseAmt: 0, evalAmt: 0, gainLoss: 0, cashAmt: 0 }
-    accMap[id].purchaseAmt += h.purchaseAmt || 0
-    accMap[id].evalAmt    += h.evalAmt    || 0
-    accMap[id].gainLoss   += h.gainLoss   || 0
+    purchaseByAccount[h.accountId] = (purchaseByAccount[h.accountId] || 0) + (h.purchaseAmt || 0)
+    gainLossByAccount[h.accountId] = (gainLossByAccount[h.accountId] || 0) + (h.gainLoss || 0)
   }
-  for (const c of cash) {
-    const id = c.accountId
-    if (!accMap[id]) accMap[id] = { accountId: id, category: accCatMap[id] || 'domestic', purchaseAmt: 0, evalAmt: 0, gainLoss: 0, cashAmt: 0 }
-    accMap[id].cashAmt += c.amount || 0
-  }
-  const accountRows = Object.values(accMap)
-    .map(r => ({ ...r, totalAmt: r.evalAmt + r.cashAmt, returnRate: r.purchaseAmt > 0 ? (r.gainLoss / r.purchaseAmt) * 100 : 0 }))
-    .sort((a, b) => b.totalAmt - a.totalAmt)
+  // 전체 계좌 공통 최신 날짜 기준, 예탁금(총액)이 0이 아닌 계좌만 표시
+  const latestEvalRows = (rowsByDate.get(latestDate) || []).filter(r => r.totalAmt !== 0)
+  const accountRows = latestEvalRows.map(r => {
+    const purchaseAmt = purchaseByAccount[r.accountId] || 0
+    const gainLoss = gainLossByAccount[r.accountId] || 0
+    return {
+      accountId: r.accountId,
+      category: getAccountCategory(r.accountId, accCatMap),
+      purchaseAmt,
+      evalAmt: r.evalAmt || 0,
+      gainLoss,
+      cashAmt: r.cashAmt || 0,
+      totalAmt: r.totalAmt || 0,
+      returnRate: purchaseAmt > 0 ? (gainLoss / purchaseAmt) * 100 : 0,
+    }
+  }).sort((a, b) => b.totalAmt - a.totalAmt)
   const accTotals = accountRows.reduce(
     (acc, r) => ({ purchaseAmt: acc.purchaseAmt + r.purchaseAmt, evalAmt: acc.evalAmt + r.evalAmt, gainLoss: acc.gainLoss + r.gainLoss, cashAmt: acc.cashAmt + r.cashAmt, totalAmt: acc.totalAmt + r.totalAmt }),
     { purchaseAmt: 0, evalAmt: 0, gainLoss: 0, cashAmt: 0, totalAmt: 0 }
   )
 
-  // 누적 수익
-  const first = snapshots[0]
+  // 누적 수익 (계좌별평가 최초~최신 날짜 기준)
+  const first = { date: firstDate, totalBalance: firstSums.pension + firstSums.domestic + firstSums.overseas }
   const cumulativeGain = (latest.totalBalance ?? 0) - (first.totalBalance ?? 0)
   const cumulativeRate = (first.totalBalance ?? 0) > 0 ? (cumulativeGain / first.totalBalance) * 100 : 0
   const months = Math.max(1,
@@ -307,22 +347,18 @@ export default function Dashboard() {
   const holdingsPurchaseTotal = sectorGroups.reduce((s, g) => s + g.purchaseAmt, 0)
   const holdingCount          = Object.keys(codeAgg).length
 
-  const aggData   = computeAggregates(snapshots, aggMode)
-  const chartData = snapshots.map(s => ({
-    date:     s.date,
-    domestic: s.domestic?.balance ?? 0,
-    overseas: s.overseas?.balance ?? 0,
-    pension:  s.pension?.balance  ?? 0,
-    loan:     -(s.totalLoan ?? 0),
-  }))
-  const chartMin = Math.min(0, ...chartData.map(d => d.loan)) - 1e8
-  const chartMax = Math.max(0, ...chartData.map(d => d.pension + d.domestic + d.overseas)) + 1e8
-  const TICK_STEP = 5e8
-  const yTicks = []
-  for (let t = Math.floor(chartMin / TICK_STEP) * TICK_STEP; t <= Math.ceil(chartMax / TICK_STEP) * TICK_STEP; t += TICK_STEP) {
-    if (t >= chartMin && t <= chartMax) yTicks.push(t)
-  }
-  if (!yTicks.includes(0)) { yTicks.push(0); yTicks.sort((a, b) => a - b) }
+  // 기간별 수익 집계 — 계좌별평가를 날짜별 카테고리 합계로 변환해 스냅샷과 동일한 형태로 공급
+  const snapshotsLike = evalDates.map(d => {
+    const s = categorySumsAsOf(d)
+    return {
+      date: d,
+      pension:  { balance: s.pension },
+      domestic: { balance: s.domestic },
+      overseas: { balance: s.overseas },
+      totalBalance: s.pension + s.domestic + s.overseas,
+    }
+  })
+  const aggData = computeAggregates(snapshotsLike, aggMode)
 
   return (
     <div className="page">
@@ -413,44 +449,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 총자산 변동 차트 */}
-      <div className="card">
-        <div className="section-header">
-          <h3 className="section-title">총자산 변동 추이</h3>
-          <div className="legend">
-            {[['#f59e0b','연금'],['#3b82f6','국내'],['#22c55e','해외'],['#ef4444','대출']].map(([color, label]) => (
-              <span key={label} className="legend-item">
-                <span className="legend-dot" style={{ background: color }} />{label}
-              </span>
-            ))}
-          </div>
-        </div>
-        <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-            <defs>
-              {[['gPension','#f59e0b'],['gDomestic','#3b82f6'],['gOverseas','#22c55e']].map(([id, color]) => (
-                <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={color} stopOpacity={0.7} />
-                  <stop offset="95%" stopColor={color} stopOpacity={0.2} />
-                </linearGradient>
-              ))}
-              <linearGradient id="gLoan" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#ef4444" stopOpacity={0.7} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={d => d.slice(5)} />
-            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => fmt(v)} width={60} ticks={yTicks} domain={[chartMin, chartMax]} />
-            <Tooltip content={<NetWorthTooltip />} />
-            <ReferenceLine y={0} stroke="#475569" strokeWidth={1} />
-            <Area type="monotone" dataKey="pension"  stackId="1" stroke="#f59e0b" fill="url(#gPension)"  strokeWidth={1.5} dot={false} />
-            <Area type="monotone" dataKey="domestic" stackId="1" stroke="#3b82f6" fill="url(#gDomestic)" strokeWidth={1.5} dot={false} />
-            <Area type="monotone" dataKey="overseas" stackId="1" stroke="#22c55e" fill="url(#gOverseas)" strokeWidth={1.5} dot={false} />
-            <Area type="monotone" dataKey="loan"     stackId="2" stroke="#ef4444" fill="url(#gLoan)"    strokeWidth={1.5} dot={false} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {/* 총자산 변동 차트 (계좌별평가 기준) */}
+      <AccountEvalChart rows={evalRows} />
 
       {/* 비중 차트 */}
       <div className="card-row">
@@ -580,10 +580,10 @@ export default function Dashboard() {
                   <tr key={i}>
                     <td>{accNameMap[r.accountId] || r.accountId}</td>
                     <td><span className={`badge badge-${r.category}`}>{CAT_LABEL[r.category] || r.category}</span></td>
-                    <td className="r">{fmtWon(r.purchaseAmt)}</td>
+                    <td className="r">{r.purchaseAmt > 0 ? fmtWon(r.purchaseAmt) : '-'}</td>
                     <td className="r">{fmtWon(r.evalAmt)}</td>
-                    <td className={`r bold ${pc(r.gainLoss)}`}>{sgn(r.gainLoss)}{fmtWon(r.gainLoss)}</td>
-                    <td className={`r bold ${pc(r.returnRate)}`}>{sgn(r.returnRate)}{r.returnRate.toFixed(2)}%</td>
+                    <td className={`r bold ${r.purchaseAmt > 0 ? pc(r.gainLoss) : 'muted'}`}>{r.purchaseAmt > 0 ? `${sgn(r.gainLoss)}${fmtWon(r.gainLoss)}` : '-'}</td>
+                    <td className={`r bold ${r.purchaseAmt > 0 ? pc(r.returnRate) : 'muted'}`}>{r.purchaseAmt > 0 ? `${sgn(r.returnRate)}${r.returnRate.toFixed(2)}%` : '-'}</td>
                     <td className="r dim">{r.cashAmt > 0 ? fmtWon(r.cashAmt) : '-'}</td>
                     <td className="r bold">{fmtWon(r.totalAmt)}</td>
                   </tr>

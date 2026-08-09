@@ -392,7 +392,7 @@ export default function TempAccountBalance() {
 }
 
 const styles = {
-  container: { maxWidth: 1100, margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, margin: 0 },
   desc: { color: '#94a3b8', fontSize: 14, margin: '8px 0 20px', lineHeight: 1.6 },
   descSub: { color: '#475569', fontSize: 12 },

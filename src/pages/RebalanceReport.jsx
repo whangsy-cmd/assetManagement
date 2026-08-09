@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
-import { getLatestHoldings, getLatestCash, getAccounts, getSnapshots, getSectors, getLoans, getRebalanceSettings, saveRebalanceSettings } from '../utils/firestore'
+import { getLatestHoldings, getAccounts, getAllAccountEval, getSectors, getLoans, getRebalanceSettings, saveRebalanceSettings } from '../utils/firestore'
+import { getAccountCategory, LOAN_ACCOUNT_ID } from '../utils/holdingsAgg'
 import '../common.css'
 
 function fmt(n) {
@@ -20,9 +21,8 @@ function variance(a) { const m = mean(a); return a.length ? mean(a.map(x => (x -
 export default function RebalanceReport() {
   const { user } = useAuth()
   const [holdings, setHoldings] = useState([])
-  const [cash, setCash] = useState([])
   const [accounts, setAccounts] = useState([])
-  const [snapshots, setSnapshots] = useState([])
+  const [accountEval, setAccountEval] = useState([])
   const [sectors, setSectors] = useState([])
   const [loans, setLoans] = useState([])
   const [settings, setSettings] = useState({})
@@ -34,14 +34,13 @@ export default function RebalanceReport() {
     if (!user) return
     Promise.all([
       getLatestHoldings(user.uid),
-      getLatestCash(user.uid),
       getAccounts(user.uid),
-      getSnapshots(user.uid, 500),
+      getAllAccountEval(user.uid),
       getSectors(user.uid),
       getLoans(user.uid),
       getRebalanceSettings(user.uid),
-    ]).then(([h, c, acc, s, sec, ln, st]) => {
-      setHoldings(h); setCash(c); setAccounts(acc); setSnapshots(s); setSectors(sec); setLoans(ln)
+    ]).then(([h, acc, s, sec, ln, st]) => {
+      setHoldings(h); setAccounts(acc); setAccountEval(s); setSectors(sec); setLoans(ln)
       setSettings(st || {})
       setLoading(false)
     })
@@ -64,6 +63,33 @@ export default function RebalanceReport() {
   }
 
   if (loading) return <div className="loading">로딩 중...</div>
+
+  // 계좌별평가(accountEval)를 날짜별 국내/해외/연금 잔액으로 합산 (기존 snapshots 대체)
+  const accCatMap = Object.fromEntries(accounts.map(a => [a.accountId, a.category]))
+  const evalRows = accountEval.filter(r => r.accountId !== LOAN_ACCOUNT_ID)
+  const rowsByAccount = new Map()
+  for (const r of evalRows) {
+    if (!rowsByAccount.has(r.accountId)) rowsByAccount.set(r.accountId, [])
+    rowsByAccount.get(r.accountId).push(r)
+  }
+  for (const arr of rowsByAccount.values()) arr.sort((a, b) => a.date.localeCompare(b.date))
+  const cashByAccount = new Map([...rowsByAccount].map(([id, arr]) => [id, arr.at(-1)?.cashAmt || 0]))
+  function categorySumsAsOf(asOfDate) {
+    const sums = { pension: 0, domestic: 0, overseas: 0 }
+    for (const [accountId, arr] of rowsByAccount) {
+      let latestRow = null
+      for (const r of arr) { if (r.date > asOfDate) break; latestRow = r }
+      if (!latestRow) continue
+      sums[getAccountCategory(accountId, accCatMap)] += latestRow.totalAmt || 0
+    }
+    return sums
+  }
+  const evalDates = [...new Set(evalRows.map(r => r.date))].sort()
+  const snapshots = evalDates.map(date => {
+    const s = categorySumsAsOf(date)
+    return { date, pension: { balance: s.pension }, domestic: { balance: s.domestic }, overseas: { balance: s.overseas } }
+  })
+
   if (!snapshots.length) return (
     <div className="empty">
       <p>아직 데이터가 없습니다.</p>
@@ -86,9 +112,9 @@ export default function RebalanceReport() {
       </div>
 
       {tab === 'kelly'
-        ? <KellyTab snapshots={snapshots} latest={latest} holdings={holdings} cash={cash} accounts={accounts} loanTotal={loanTotal}
+        ? <KellyTab snapshots={snapshots} latest={latest} holdings={holdings} cashByAccount={cashByAccount} accounts={accounts} loanTotal={loanTotal}
             settings={settings.kelly} onSettingsChange={updateSettings} />
-        : <ShannonTab holdings={holdings} cash={cash} sectors={sectors} accounts={accounts} snapshots={snapshots}
+        : <ShannonTab holdings={holdings} cashByAccount={cashByAccount} sectors={sectors} accounts={accounts} snapshots={snapshots}
             settings={settings.shannon} onSettingsChange={updateSettings} />
       }
     </div>
@@ -97,7 +123,7 @@ export default function RebalanceReport() {
 
 // 연금/연금외 풀 간 자금이동 불가 → 켈리 f*는 "각 풀 자체 자금 중 위험자산 비중"으로 적용(풀 내부에서만 실행 가능).
 // 매수는 그 풀의 가용예수금까지만 실행가능(연금은 외부현금 유입 불가), 매도는 항상 실행가능.
-function KellyTab({ snapshots, latest, holdings, cash, accounts, loanTotal, settings, onSettingsChange }) {
+function KellyTab({ snapshots, latest, holdings, cashByAccount, accounts, loanTotal, settings, onSettingsChange }) {
   const [windowN, setWindowN] = useState(settings?.windowN ?? 12)
   const [multiplier, setMultiplier] = useState(settings?.multiplier ?? 0.5)
   const [minCap, setMinCap] = useState(settings?.minCap ?? 0)
@@ -112,7 +138,12 @@ function KellyTab({ snapshots, latest, holdings, cash, accounts, loanTotal, sett
   const accCatMap = Object.fromEntries(accounts.map(a => [a.accountId, a.category]))
   const isPension = (id) => accCatMap[id] === 'pension'
 
-  const pensionRets = snapshots.slice(1).map(s => (s.pension?.changeRate ?? 0) / 100)
+  const pensionSeries = snapshots.map(s => s.pension?.balance ?? 0)
+  const pensionRets = []
+  for (let i = 1; i < pensionSeries.length; i++) {
+    const prev = pensionSeries[i - 1]
+    pensionRets.push(prev > 0 ? (pensionSeries[i] - prev) / prev : 0)
+  }
   const otherSeries = snapshots.map(s => (s.domestic?.balance ?? 0) + (s.overseas?.balance ?? 0))
   const otherRets = []
   for (let i = 1; i < otherSeries.length; i++) {
@@ -121,11 +152,11 @@ function KellyTab({ snapshots, latest, holdings, cash, accounts, loanTotal, sett
   }
 
   const pensionStock = holdings.filter(h => isPension(h.accountId)).reduce((s, h) => s + (h.evalAmt || 0), 0)
-  const pensionCash = cash.filter(c => isPension(c.accountId)).reduce((s, c) => s + (c.amount || 0), 0)
+  const pensionCash = [...cashByAccount].filter(([id]) => isPension(id)).reduce((s, [, amt]) => s + amt, 0)
   const pensionPoolTotal = latest.pension?.balance ?? (pensionStock + pensionCash)
 
   const otherStock = holdings.filter(h => !isPension(h.accountId)).reduce((s, h) => s + (h.evalAmt || 0), 0)
-  const otherCash = cash.filter(c => !isPension(c.accountId)).reduce((s, c) => s + (c.amount || 0), 0) - loanTotal
+  const otherCash = [...cashByAccount].filter(([id]) => !isPension(id)).reduce((s, [, amt]) => s + amt, 0) - loanTotal
   const otherPoolTotal = (latest.domestic?.balance ?? 0) + (latest.overseas?.balance ?? 0) - loanTotal
 
   const cats = [
@@ -231,14 +262,14 @@ function KellyTab({ snapshots, latest, holdings, cash, accounts, loanTotal, sett
 
 // ── 셰넌 기준 탭 ─────────────────────────────────────────────
 // 연금은 외부 현금 추가 불가 → 연금/연금외 완전 분리 계산 (풀 간 자금이동 없음 전제). 대출은 미반영, 현재 예수금 그대로 사용.
-function ShannonTab({ holdings, cash, sectors, accounts, settings, onSettingsChange, snapshots }) {
+function ShannonTab({ holdings, cashByAccount, sectors, accounts, settings, onSettingsChange, snapshots }) {
   const accCatMap = Object.fromEntries(accounts.map(a => [a.accountId, a.category]))
   const isPension = (accountId) => accCatMap[accountId] === 'pension'
 
   const pensionHoldings = holdings.filter(h => isPension(h.accountId))
   const otherHoldings = holdings.filter(h => !isPension(h.accountId))
-  const pensionCash = cash.filter(c => isPension(c.accountId))
-  const otherCash = cash.filter(c => !isPension(c.accountId))
+  const pensionCashTotal = [...cashByAccount].filter(([id]) => isPension(id)).reduce((s, [, amt]) => s + amt, 0)
+  const otherCashTotal = [...cashByAccount].filter(([id]) => !isPension(id)).reduce((s, [, amt]) => s + amt, 0)
 
   const dates = snapshots.map(s => s.date)
   const pensionHistory = snapshots.map(s => s.pension?.balance ?? 0)
@@ -246,10 +277,10 @@ function ShannonTab({ holdings, cash, sectors, accounts, settings, onSettingsCha
 
   return (
     <>
-      <ShannonPool poolLabel="연금" holdings={pensionHoldings} cash={pensionCash} sectors={sectors}
+      <ShannonPool poolLabel="연금" holdings={pensionHoldings} cashTotal={pensionCashTotal} sectors={sectors}
         settings={settings?.pension} onSettingsChange={patch => onSettingsChange({ shannon: { pension: patch } })}
         dates={dates} history={pensionHistory} />
-      <ShannonPool poolLabel="연금외 (국내+해외)" holdings={otherHoldings} cash={otherCash} sectors={sectors}
+      <ShannonPool poolLabel="연금외 (국내+해외)" holdings={otherHoldings} cashTotal={otherCashTotal} sectors={sectors}
         settings={settings?.other} onSettingsChange={patch => onSettingsChange({ shannon: { other: patch } })}
         dates={dates} history={otherHistory} />
     </>
@@ -283,7 +314,7 @@ function maxDrawdown(path) {
   return dd
 }
 
-function ShannonPool({ poolLabel, holdings, cash, sectors, settings, onSettingsChange, dates, history }) {
+function ShannonPool({ poolLabel, holdings, cashTotal, sectors, settings, onSettingsChange, dates, history }) {
   const sectorMap = Object.fromEntries(sectors.map(s => [s.code, s.sector || '미분류']))
   const sectorAgg = {}
   for (const h of holdings) {
@@ -294,7 +325,6 @@ function ShannonPool({ poolLabel, holdings, cash, sectors, settings, onSettingsC
     sectorAgg[sec].gainLoss += h.gainLoss || 0
   }
   const stockTotal = Object.values(sectorAgg).reduce((a, b) => a + b.evalAmt, 0)
-  const cashTotal = cash.reduce((s, c) => s + (c.amount || 0), 0)
   if (!sectorAgg['예수금']) sectorAgg['예수금'] = { evalAmt: 0, purchaseAmt: 0, gainLoss: 0 }
   sectorAgg['예수금'].evalAmt += cashTotal
   const total = stockTotal + cashTotal || 1

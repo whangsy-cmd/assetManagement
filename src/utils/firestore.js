@@ -1,14 +1,8 @@
 import {
   doc, setDoc, getDoc, getDocs, collection, deleteDoc,
-  serverTimestamp, writeBatch, query
+  serverTimestamp, writeBatch,
 } from 'firebase/firestore'
 import { lookupSector } from './sectorLookup'
-
-function toCatKey(cat) {
-  if (['isa', 'irp', 'pension'].includes(cat)) return 'pension'
-  if (cat === 'overseas') return 'overseas'
-  return 'domestic'
-}
 import { db } from '../firebase'
 
 // ── 컬렉션 전체 삭제 (500개 단위 배치) ─────────────────────
@@ -84,73 +78,6 @@ export async function ensureSectors(uid, holdings) {
   await batch.commit()
 }
 
-// ── 스냅샷 생성 ─────────────────────────────────────────────
-export async function createSnapshot(uid, date) {
-  const [holdingsSnap, cashSnap, loansSnap, accountsSnap] = await Promise.all([
-    getDocs(query(collection(db, 'users', uid, 'holdings'))),
-    getDocs(query(collection(db, 'users', uid, 'cash'))),
-    getDocs(collection(db, 'users', uid, 'loans')),
-    getDocs(collection(db, 'users', uid, 'accounts')),
-  ])
-
-  const todayHoldings = holdingsSnap.docs.map(d => d.data()).filter(d => d.date === date)
-  const todayCash = cashSnap.docs.map(d => d.data()).filter(d => d.date === date)
-  const loans = loansSnap.docs.map(d => d.data())
-  const accountCatMap = Object.fromEntries(
-    accountsSnap.docs.map(d => d.data()).map(a => [a.accountId, a.category])
-  )
-
-  // 이전 스냅샷 조회 (증감 계산용) — orderBy 없이 클라이언트 정렬
-  const allSnaps = await getDocs(collection(db, 'users', uid, 'snapshots'))
-  const prev = allSnaps.docs
-    .map(d => d.data())
-    .filter(d => d.date < date)
-    .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null
-
-  // 카테고리별 잔액 집계
-  const balances = { pension: 0, domestic: 0, overseas: 0 }
-  for (const h of todayHoldings) {
-    balances[toCatKey(accountCatMap[h.accountId] || 'domestic')] += h.evalAmt || 0
-  }
-  for (const c of todayCash) {
-    balances[toCatKey(accountCatMap[c.accountId] || 'domestic')] += c.amount || 0
-  }
-
-  // 카테고리 객체 생성 (잔액, 증감, 증가율)
-  function makeCat(key) {
-    const balance = balances[key]
-    const prevBalance = prev?.[key]?.balance ?? 0
-    const change = balance - prevBalance
-    const changeRate = prevBalance > 0 ? (change / prevBalance) * 100 : 0
-    return { balance, change, changeRate }
-  }
-
-  const pension = makeCat('pension')
-  const domestic = makeCat('domestic')
-  const overseas = makeCat('overseas')
-
-  const totalBalance = pension.balance + domestic.balance + overseas.balance
-  const prevTotalBalance = prev?.totalBalance ?? 0
-  const totalChange = totalBalance - prevTotalBalance
-  const totalChangeRate = prevTotalBalance > 0 ? (totalChange / prevTotalBalance) * 100 : 0
-
-  const totalLoan = loans.reduce((sum, l) => sum + (l.amount || 0), 0)
-  const netBalance = totalBalance - totalLoan
-
-  await setDoc(doc(db, 'users', uid, 'snapshots', date), {
-    date,
-    pension,
-    domestic,
-    overseas,
-    totalBalance,
-    totalChange,
-    totalChangeRate,
-    totalLoan,
-    netBalance,
-    createdAt: serverTimestamp(),
-  })
-}
-
 // ── 대출금 CRUD ─────────────────────────────────────────────
 export async function getLoans(uid) {
   const snap = await getDocs(collection(db, 'users', uid, 'loans'))
@@ -184,15 +111,6 @@ export async function getSnapshots(uid, count = 52) {
 // ── 최신 보유종목 조회 (대시보드용) ────────────────────────
 export async function getLatestHoldings(uid) {
   const snap = await getDocs(collection(db, 'users', uid, 'holdings'))
-  const all = snap.docs.map(d => d.data())
-  if (!all.length) return []
-  const latestDate = all.map(d => d.date).sort().at(-1)
-  return all.filter(d => d.date === latestDate)
-}
-
-// ── 최신 예수금 조회 (대시보드용) ──────────────────────────
-export async function getLatestCash(uid) {
-  const snap = await getDocs(collection(db, 'users', uid, 'cash'))
   const all = snap.docs.map(d => d.data())
   if (!all.length) return []
   const latestDate = all.map(d => d.date).sort().at(-1)
@@ -262,31 +180,6 @@ export async function getLastCashFlowDate(uid, accountId) {
   const snap = await getDocs(collection(db, 'users', uid, 'cashFlows'))
   const dates = snap.docs.map(d => d.data()).filter(d => d.accountId === accountId).map(d => d.date)
   return dates.length ? dates.sort().at(-1) : null
-}
-
-// ── 옵션계좌 월별손익 저장/조회 (입출금내역과 별도 컬렉션, 브로커 제공 월손익 직접 입력) ──
-export async function saveOptionMonthlyProfit(uid, rows) {
-  const noAccount = rows.find(r => !r.accountId)
-  if (noAccount) throw new Error(`계좌번호가 없는 데이터가 있습니다: ${noAccount.month}`)
-  const batch = writeBatch(db)
-  for (const r of rows) {
-    const id = `${r.accountId}_${r.month}`
-    const ref = doc(db, 'users', uid, 'optionMonthlyProfit', id)
-    batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
-  }
-  await batch.commit()
-}
-
-export async function getAllOptionMonthlyProfit(uid) {
-  const snap = await getDocs(collection(db, 'users', uid, 'optionMonthlyProfit'))
-  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
-    .sort((a, b) => b.month.localeCompare(a.month))
-}
-
-export async function getLastOptionMonth(uid, accountId) {
-  const snap = await getDocs(collection(db, 'users', uid, 'optionMonthlyProfit'))
-  const months = snap.docs.map(d => d.data()).filter(d => d.accountId === accountId).map(d => d.month)
-  return months.length ? months.sort().at(-1) : null
 }
 
 // ── 계좌별 평가 테이블 저장/조회 (holdings+cash 집계 결과 materialize) ──

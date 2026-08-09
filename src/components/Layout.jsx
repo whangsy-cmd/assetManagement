@@ -12,15 +12,14 @@ const NAV = [
   { to: '/shannon-sim', label: '셰넌 시뮬레이션' },
   { to: '/input',    label: '데이터 입력' },
   { to: '/dataview', label: '데이터 조회' },
-  { to: '/schema',   label: 'DB 구조' },
-  { to: '/kiwoom-test', label: '키움 테스트' },
   { to: '/accounts', label: '계좌 관리' },
   { to: '/sectors',  label: '섹터 관리' },
   { to: '/migrate',  label: '데이터 이전' },
   { to: '/migrate-account-eval', label: '계좌평가 이전' },
   { to: '/temp-balance', label: '임시계좌잔고' },
   { to: '/income',   label: '이자·배당' },
-  { to: '/options',  label: '옵션' },
+  { to: '/schema',   label: 'DB 구조' },
+  { to: '/kiwoom-test', label: '키움 테스트' },
 ]
 
 export default function Layout({ children }) {
