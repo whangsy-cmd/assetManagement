@@ -1,3 +1,4 @@
+// 데이터 입력 화면 — 브로커 리포트 붙여넣기로 보유종목/예수금/입출금 등록, 계좌별평가(accountEval) 생성
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useAccounts } from '../hooks/useAccounts'
@@ -15,9 +16,10 @@ import {
 import { getUsdKrwRate } from '../utils/exchangeRate'
 import { buildAccountEvalRows, buildLoanEvalRow } from '../utils/holdingsAgg'
 import {
-  saveHoldings, saveCash, ensureSectors, saveAccountEval, getSectors, getLoans,
+  saveHoldings, ensureSectors, saveAccountEval, getSectors, getLoans,
   saveCashFlows, getLastCashFlowDate,
 } from '../utils/firestore'
+import '../common.css'
 
 const TODAY = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
@@ -558,7 +560,6 @@ export default function DataInput() {
           await ensureSectors(user.uid, data)
           holdingsForDate.push(...data.map(r => ({ ...r, date })))
         } else {
-          await saveCash(user.uid, date, data)
           cashForDate.push(...data.map(r => ({ ...r, date })))
         }
       }
@@ -585,7 +586,7 @@ export default function DataInput() {
   }
 
   return (
-    <div style={styles.container}>
+    <div className="page">
       <h2 style={styles.heading}>데이터 입력</h2>
 
       <div style={styles.dateRow}>
@@ -835,7 +836,6 @@ export default function DataInput() {
 }
 
 const styles = {
-  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, marginBottom: 20 },
   dateRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 },
   dateInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', color: '#f1f5f9', fontSize: 14 },

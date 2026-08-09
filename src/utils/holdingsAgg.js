@@ -8,7 +8,7 @@ export const SPECIAL_ACCOUNT_CATEGORY = {
 }
 
 export function getAccountCategory(accountId, accCatMap) {
-  return accCatMap[accountId] || SPECIAL_ACCOUNT_CATEGORY[accountId] || 'domestic'
+  return SPECIAL_ACCOUNT_CATEGORY[accountId] || accCatMap[accountId] || 'domestic'
 }
 
 // 대출금은 날짜/계좌 이력이 없는 단일 현재값이라 계좌별평가에 가상 계좌로 등록한다
@@ -37,6 +37,35 @@ export function buildAccountEvalRows(holdings, cash) {
   return [...map.values()]
     .map(r => ({ ...r, totalAmt: r.evalAmt + r.cashAmt }))
     .sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
+}
+
+// 계좌별평가(accountEval) 행을 계좌별로 묶어 날짜 오름차순 정렬 (대출금 가상계좌 제외)
+export function buildRowsByAccount(rows) {
+  const rowsByAccount = new Map()
+  for (const r of rows) {
+    if (r.accountId === LOAN_ACCOUNT_ID) continue
+    if (!rowsByAccount.has(r.accountId)) rowsByAccount.set(r.accountId, [])
+    rowsByAccount.get(r.accountId).push(r)
+  }
+  for (const arr of rowsByAccount.values()) arr.sort((a, b) => a.date.localeCompare(b.date))
+  return rowsByAccount
+}
+
+// 계좌마다 갱신 주기가 달라도(선물옵션 등) 각 계좌의 asOfDate 이하 최신값을 이월해서 카테고리별로 합산
+export function categorySumsAsOf(rowsByAccount, asOfDate, accCatMap) {
+  const sums = { pension: 0, domestic: 0, overseas: 0 }
+  for (const [accountId, arr] of rowsByAccount) {
+    let latestRow = null
+    for (const r of arr) { if (r.date > asOfDate) break; latestRow = r }
+    if (!latestRow) continue
+    sums[getAccountCategory(accountId, accCatMap)] += latestRow.totalAmt || 0
+  }
+  return sums
+}
+
+// 계좌별 가장 최근 예수금(cashAmt) 맵
+export function latestCashByAccount(rowsByAccount) {
+  return new Map([...rowsByAccount].map(([id, arr]) => [id, arr.at(-1)?.cashAmt || 0]))
 }
 
 // 종목코드 기준(계좌 합산)으로 날짜별 시계열을 만든다.

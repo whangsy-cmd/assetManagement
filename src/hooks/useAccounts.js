@@ -1,3 +1,4 @@
+// 계좌 목록 실시간 구독 훅
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'

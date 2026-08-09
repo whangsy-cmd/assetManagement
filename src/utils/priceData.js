@@ -1,3 +1,4 @@
+// 종목 과거 일별 시세 캐시(priceSeries) 조회/다운로드/CSV 입출력 (셰넌 시뮬레이션용)
 import { doc, getDoc, getDocs, setDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { fetchKrDailyChart, fetchUsDailyChart } from './kiwoomApi'

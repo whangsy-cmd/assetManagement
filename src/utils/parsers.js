@@ -1,3 +1,4 @@
+// 브로커별(미래에셋/키움 국내·해외) 붙여넣기 텍스트 파서 모음
 // ── 공통 전처리 ──────────────────────────────────────────────
 export function cleanNumber(str) {
   return parseFloat(String(str).replace(/["',+%]/g, '').trim()) || 0

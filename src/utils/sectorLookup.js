@@ -1,3 +1,4 @@
+// 신규 종목 등록 시 네이버(국내)/야후(해외)에서 섹터 자동 조회
 const isKoreanCode = (code) => /^\d{6}$/.test(code)
 
 async function fetchNaverSector(code) {

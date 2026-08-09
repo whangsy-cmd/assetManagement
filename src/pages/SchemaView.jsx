@@ -1,9 +1,11 @@
+// DB 구조 화면 — Firestore 컬렉션별 필드/샘플 조회
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getAllDocsRaw } from '../utils/firestore'
+import '../common.css'
 
 // settings(키움 API 키 등 시크릿 포함)는 제외
-const COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance']
+const COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'taxPayments', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance']
 const SAMPLE_SIZE = 3
 
 const DESCRIPTIONS = {
@@ -14,11 +16,12 @@ const DESCRIPTIONS = {
   sectors: '종목별 섹터 분류',
   loans: '대출금 목록',
   incomeReports: '연도별 이자·배당 소득 리포트',
+  taxPayments: '세금납부내역 (납부일자/세목/납부세액)',
   priceSeries: '종목별 과거 일별 시세 캐시 (셰넌 시뮬레이션용)',
   cashFlows: '계좌별 입출금내역',
-  optionMonthlyProfit: '옵션계좌 월별 손익 (브로커 제공값 직접 입력)',
-  accountEval: '계좌별 평가 (holdings+cash 합산 결과, 계좌평가 이전 화면에서 생성)',
-  tempAccountDailyBalance: '임시계좌일별잔고 (증권사 리포트 붙여넣기 이전용 임시 테이블)',
+  optionMonthlyProfit: '옵션계좌 월별 손익 (브로커 제공값 직접 입력) — 2026/8/9 기준 더이상 사용안함',
+  accountEval: '계좌별 평가 (holdings+cash 합산 결과)',
+  tempAccountDailyBalance: '임시계좌일별잔고 (증권사 리포트 붙여넣기 이전용 임시 테이블) — 2026/8/9 기준 더이상 사용안함',
 }
 
 function getType(v) {
@@ -127,7 +130,7 @@ function CollectionCard({ name }) {
 
 export default function SchemaView() {
   return (
-    <div style={styles.container}>
+    <div className="page">
       <h2 style={styles.heading}>DB 구조 조회</h2>
       <p style={styles.desc}>컬렉션별 필드 구조와 샘플 데이터입니다. 클릭해서 펼쳐보세요.</p>
       {COLLECTIONS.map(c => <CollectionCard key={c} name={c} />)}
@@ -136,7 +139,6 @@ export default function SchemaView() {
 }
 
 const styles = {
-  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, margin: 0 },
   desc: { color: '#64748b', fontSize: 13, margin: '8px 0 20px' },
   card: { background: '#1e293b', borderRadius: 12, marginBottom: 12, overflow: 'hidden' },

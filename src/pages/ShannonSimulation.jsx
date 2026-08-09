@@ -1,15 +1,14 @@
+// 셰넌 시뮬레이션 화면 — 안전자산 배분 리밸런싱 백테스트
 import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
 import { getSavedSymbols, getPriceSeries, downloadMissingRange, addDays, parseCsvPrices, saveCsvPrices } from '../utils/priceData'
 import { deleteDocument } from '../utils/firestore'
+import { sgn, pc } from '../utils/format'
 import '../common.css'
 
 const TODAY = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
 const DEFAULT_FROM = addDays(TODAY, -365 * 3)
-
-function sgn(v) { return v >= 0 ? '+' : '' }
-function pc(v) { return v >= 0 ? 'pos' : 'neg' }
 
 // ── 셰넌 리밸런싱 시뮬레이션 (순수 함수) ────────────────────
 // 안전자산은 현금이든 종목이든 연 배당률을 월 1회(월 넘어갈 때) 복리로 반영한다.

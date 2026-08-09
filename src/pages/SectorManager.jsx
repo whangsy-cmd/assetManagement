@@ -1,6 +1,9 @@
+// 섹터 관리 화면 (종목별 섹터 분류)
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getSectors, saveSector, deleteDocument, deleteCollectionData, countCollection } from '../utils/firestore'
+import DeleteModal from '../components/DeleteModal'
+import '../common.css'
 
 export default function SectorManager() {
   const { user } = useAuth()
@@ -10,7 +13,6 @@ export default function SectorManager() {
   const [saving, setSaving] = useState(null)
   const [filter, setFilter] = useState('all')
   const [modal, setModal] = useState(null) // { type: 'row'|'all', code?, count }
-  const [confirmText, setConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
 
   const load = async () => {
@@ -37,7 +39,6 @@ export default function SectorManager() {
   const openDeleteAll = async () => {
     const count = await countCollection(user.uid, 'sectors')
     setModal({ type: 'all', count })
-    setConfirmText('')
   }
 
   const handleDelete = async () => {
@@ -59,7 +60,7 @@ export default function SectorManager() {
   if (loading) return <div style={styles.loading}>로딩 중...</div>
 
   return (
-    <div style={styles.container}>
+    <div className="page">
       <h2 style={styles.heading}>섹터 관리</h2>
       <div style={styles.toolbar}>
         <div style={styles.left}>
@@ -128,48 +129,20 @@ export default function SectorManager() {
       </div>
 
       {modal && (
-        <div style={styles.overlay} onClick={() => setModal(null)}>
-          <div style={styles.modalCard} onClick={e => e.stopPropagation()}>
-            <h3 style={styles.modalTitle}>⚠️ {modal.type === 'row' ? `${modal.code} 삭제` : '섹터 전체 삭제'}</h3>
-            <p style={styles.modalCount}>
-              <strong style={{ color: '#f87171' }}>{modal.count}개</strong> 문서가 삭제됩니다.
-            </p>
-            {modal.type === 'all' && (
-              <>
-                <p style={styles.modalGuide}>계속하려면 <strong style={{ color: '#f87171' }}>삭제</strong>를 입력하세요.</p>
-                <input
-                  style={styles.modalInput}
-                  value={confirmText}
-                  onChange={e => setConfirmText(e.target.value)}
-                  placeholder="삭제"
-                  autoFocus
-                />
-              </>
-            )}
-            <div style={styles.modalActions}>
-              <button style={styles.cancelBtn} onClick={() => setModal(null)}>취소</button>
-              <button
-                style={{
-                  ...styles.modalDelBtn,
-                  opacity: (modal.type === 'all' ? confirmText === '삭제' : true) ? 1 : 0.4,
-                  cursor: (modal.type === 'all' ? confirmText === '삭제' : true) ? 'pointer' : 'not-allowed',
-                }}
-                onClick={handleDelete}
-                disabled={(modal.type === 'all' && confirmText !== '삭제') || deleting}
-                autoFocus={modal.type === 'row'}
-              >
-                {deleting ? '삭제 중...' : '삭제'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteModal
+          title={modal.type === 'row' ? `${modal.code} 삭제` : '섹터 전체 삭제'}
+          requireConfirm={modal.type === 'all'}
+          count={modal.count}
+          onConfirm={handleDelete}
+          onCancel={() => setModal(null)}
+          loading={deleting}
+        />
       )}
     </div>
   )
 }
 
 const styles = {
-  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   loading: { color: '#94a3b8', padding: 40, textAlign: 'center' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, marginBottom: 16 },
   toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12 },
@@ -189,13 +162,4 @@ const styles = {
   actions: { display: 'flex', gap: 6, alignItems: 'center' },
   saveBtn: { background: '#22c55e', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' },
   delBtn: { background: 'transparent', color: '#ef4444', border: '1px solid #7f1d1d', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 12 },
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modalCard: { background: '#1e293b', borderRadius: 14, padding: '32px', width: '100%', maxWidth: 400, boxShadow: '0 25px 50px rgba(0,0,0,0.6)' },
-  modalTitle: { color: '#fca5a5', fontSize: 18, fontWeight: 700, marginBottom: 12 },
-  modalCount: { color: '#e2e8f0', fontSize: 15, marginBottom: 12 },
-  modalGuide: { color: '#94a3b8', fontSize: 13, marginBottom: 10 },
-  modalInput: { width: '100%', background: '#0f172a', border: '1px solid #ef4444', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: 15, marginBottom: 20, boxSizing: 'border-box' },
-  modalActions: { display: 'flex', justifyContent: 'flex-end', gap: 10 },
-  cancelBtn: { background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '8px 18px', cursor: 'pointer', fontSize: 14 },
-  modalDelBtn: { background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontSize: 14, fontWeight: 700 },
 }

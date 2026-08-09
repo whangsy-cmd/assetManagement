@@ -1,3 +1,4 @@
+// 상단 네비게이션 + 페이지 레이아웃 뼈대
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import '../common.css'
@@ -8,13 +9,13 @@ const BUILD_TIME_KST = new Date(__BUILD_TIME__).toLocaleString('ko-KR', {
 
 const NAV = [
   { to: '/',         label: '대시보드' },
-  { to: '/rebalance', label: '리밸런싱' },
-  { to: '/shannon-sim', label: '셰넌 시뮬레이션' },
   { to: '/input',    label: '데이터 입력' },
   { to: '/dataview', label: '데이터 조회' },
+  { to: '/rebalance', label: '리밸런싱' },
+  { to: '/shannon-sim', label: '셰넌 시뮬레이션' },
   { to: '/accounts', label: '계좌 관리' },
   { to: '/sectors',  label: '섹터 관리' },
-  { to: '/income',   label: '이자·배당' },
+  { to: '/income',   label: '이자·배당·세금' },
   { to: '/schema',   label: 'DB 구조' },
   { to: '/kiwoom-test', label: '키움 테스트' },
 ]

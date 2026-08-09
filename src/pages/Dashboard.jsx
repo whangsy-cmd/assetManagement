@@ -1,30 +1,21 @@
+// 대시보드 — 총자산 현황/그래프/계좌별 평가현황/섹터 비중
 import { Fragment, useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
 import { getLatestHoldings, getAccounts, getAllAccountEval, getSectors, getRebalanceSettings, getLoans } from '../utils/firestore'
-import { getAccountCategory, LOAN_ACCOUNT_ID } from '../utils/holdingsAgg'
+import { getAccountCategory, LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, latestCashByAccount } from '../utils/holdingsAgg'
 import AccountEvalChart from '../components/AccountEvalChart'
+import { fmt, sgn, pc } from '../utils/format'
 import '../common.css'
 
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16']
 const CAT_LABEL = { pension: '연금', domestic: '국내', overseas: '해외' }
 const DASHBOARD_START_DATE = '2025-02-07' // 그래프/수익률/누적수익 등 전체 계산 시작 기준일
 
-function fmt(n) {
-  if (!n && n !== 0) return '-'
-  const abs = Math.abs(n), sign = n < 0 ? '-' : ''
-  if (abs >= 1e8) return sign + (abs / 1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '억'
-  if (abs >= 1e4) return sign + Math.round(abs / 1e4).toLocaleString() + '만'
-  return n.toLocaleString()
-}
-
 function fmtWon(n) {
   if (!n && n !== 0) return '-'
   return Math.round(n).toLocaleString()
 }
-
-function sgn(v) { return v >= 0 ? '+' : '' }
-function pc(v)  { return v >= 0 ? 'pos' : 'neg' }
 
 function makePieLabel(denom) {
   return function({ cx, cy, midAngle, innerRadius, outerRadius, value }) {
@@ -177,37 +168,20 @@ export default function Dashboard() {
 
   // 계좌별평가(accountEval)를 날짜별로 묶고, 계좌별로도 날짜 오름차순 정렬
   const rowsByDate = new Map()
-  const rowsByAccount = new Map()
   for (const r of evalRows) {
     if (!rowsByDate.has(r.date)) rowsByDate.set(r.date, [])
     rowsByDate.get(r.date).push(r)
-    if (!rowsByAccount.has(r.accountId)) rowsByAccount.set(r.accountId, [])
-    rowsByAccount.get(r.accountId).push(r)
   }
-  for (const arr of rowsByAccount.values()) arr.sort((a, b) => a.date.localeCompare(b.date))
-  const cashAmtByAccount = new Map([...rowsByAccount].map(([id, arr]) => [id, arr.at(-1)?.cashAmt || 0]))
+  const rowsByAccount = buildRowsByAccount(evalRows)
+  const cashAmtByAccount = latestCashByAccount(rowsByAccount)
   const evalDates = [...rowsByDate.keys()].sort()
   const latestDate = evalDates.at(-1)
   const prevDate = evalDates.length > 1 ? evalDates[evalDates.length - 2] : null
   const firstDate = evalDates[0]
 
-  // 계좌마다 갱신 주기가 달라도(선물옵션 등) 각 계좌의 asOfDate 이하 최신값을 이월해서 합산 — 데이터 있는 계좌만 포함됨
-  function categorySumsAsOf(asOfDate) {
-    const sums = { pension: 0, domestic: 0, overseas: 0 }
-    for (const [accountId, arr] of rowsByAccount) {
-      let latestRow = null
-      for (const r of arr) {
-        if (r.date > asOfDate) break
-        latestRow = r
-      }
-      if (!latestRow) continue
-      sums[getAccountCategory(accountId, accCatMap)] += latestRow.totalAmt || 0
-    }
-    return sums
-  }
-  const latestSums = categorySumsAsOf(latestDate)
-  const prevSums = prevDate ? categorySumsAsOf(prevDate) : latestSums
-  const firstSums = categorySumsAsOf(firstDate)
+  const latestSums = categorySumsAsOf(rowsByAccount, latestDate, accCatMap)
+  const prevSums = prevDate ? categorySumsAsOf(rowsByAccount, prevDate, accCatMap) : latestSums
+  const firstSums = categorySumsAsOf(rowsByAccount, firstDate, accCatMap)
   const prevTotal = prevSums.pension + prevSums.domestic + prevSums.overseas
 
   const totalLoan = loans.reduce((s, l) => s + (l.amount || 0), 0)
@@ -349,7 +323,7 @@ export default function Dashboard() {
 
   // 기간별 수익 집계 — 계좌별평가를 날짜별 카테고리 합계로 변환해 스냅샷과 동일한 형태로 공급
   const snapshotsLike = evalDates.map(d => {
-    const s = categorySumsAsOf(d)
+    const s = categorySumsAsOf(rowsByAccount, d, accCatMap)
     return {
       date: d,
       pension:  { balance: s.pension },

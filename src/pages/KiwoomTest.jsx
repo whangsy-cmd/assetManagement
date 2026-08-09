@@ -1,8 +1,10 @@
+// 키움 REST API 호출 테스트 화면
 import { useState } from 'react'
 import {
   fetchKrHoldings, fetchKrCash, fetchUsLedger, fetchUsCashDetail,
   fetchKrCashFlows, fetchKrDailyChart, fetchUsDailyChart, kiwoomCall,
 } from '../utils/kiwoomApi'
+import '../common.css'
 
 const SIMPLE_CALLS = [
   { label: '국내 보유종목 (kt00018)', kind: 'kr', path: '/api/dostk/acnt', apiId: 'kt00018', body: { qry_tp: '0', dmst_stex_tp: 'KRX' }, fn: fetchKrHoldings },
@@ -72,7 +74,7 @@ export default function KiwoomTest() {
   }
 
   return (
-    <div style={styles.container}>
+    <div className="page">
       <h2 style={styles.heading}>키움 API 테스트</h2>
       <p style={styles.desc}>버튼을 눌러 키움 API를 직접 호출하고 원본 응답을 확인합니다. CORS 오류는 브라우저 콘솔에도 표시됩니다.</p>
 
@@ -171,7 +173,6 @@ export default function KiwoomTest() {
 }
 
 const styles = {
-  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, margin: 0 },
   desc: { color: '#64748b', fontSize: 13, margin: '8px 0 20px' },
   section: { background: '#1e293b', borderRadius: 12, padding: '16px 20px', marginBottom: 12 },

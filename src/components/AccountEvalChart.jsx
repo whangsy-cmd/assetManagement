@@ -1,3 +1,4 @@
+// 계좌별평가(accountEval) 기반 총자산 변동 추이 스택 영역 차트 (Dashboard/계좌평가이전 공용)
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 const CHART_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16']

@@ -1,7 +1,11 @@
+// 이자·배당 소득 리포트 화면
 import { useState, useEffect, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../contexts/AuthContext'
-import { saveIncomeReport, getIncomeReports, deleteIncomeReport } from '../utils/firestore'
+import {
+  saveIncomeReport, getIncomeReports, deleteIncomeReport,
+  saveTaxPayments, getAllTaxPayments, deleteDocument, deleteCollectionData,
+} from '../utils/firestore'
 import '../common.css'
 
 function parseNum(str) {
@@ -89,6 +93,14 @@ function parseExcel(file) {
   })
 }
 
+// 납부일자\t세목\t납부세액 형식 붙여넣기 파싱 (엑셀 복사 시 값이 "..."로 감싸질 수 있음)
+function parseTaxPasteText(text) {
+  return text.trim().split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+    const [date, taxType, amountStr] = line.split('\t').map(c => c.trim().replace(/^"|"$/g, ''))
+    return { date, taxType, amount: parseNum(amountStr) }
+  }).filter(r => r.date && r.taxType)
+}
+
 export default function IncomeReport() {
   const { user } = useAuth()
   const [reports, setReports] = useState(null)
@@ -99,11 +111,30 @@ export default function IncomeReport() {
   const [loading, setLoading] = useState(true)
   const fileRef = useRef()
 
+  const [taxPayments, setTaxPayments] = useState([])
+  const [taxPasteOpen, setTaxPasteOpen] = useState(false)
+  const [taxPasteText, setTaxPasteText] = useState(
+    '2025-06-23\t양도소득세\t11,110,470\n' +
+    '2025-05-21\t양도소득세\t11,110,470\n' +
+    '2026-08-03\t양도소득세\t22,000,000\n' +
+    '2026-05-27\t양도소득세\t23,310,160\n' +
+    '2026-05-01\t종합소득세\t128,450\n' +
+    '2026-05-27\t지방소득세(양도소득)\t4,531,010\n' +
+    '2026-05-01\t지방소득세(종합소득)\t12,840\n' +
+    '2025-06-23\t지방소득세(양도소득)\t2,222,090'
+  )
+  const [taxPreview, setTaxPreview] = useState(null)
+  const [taxError, setTaxError] = useState('')
+  const [taxSaving, setTaxSaving] = useState(false)
+
+  const loadTaxPayments = () => getAllTaxPayments(user.uid).then(setTaxPayments)
+
   useEffect(() => {
     getIncomeReports(user.uid).then(r => {
       setReports(r)
       setLoading(false)
     })
+    loadTaxPayments()
   }, [user.uid])
 
   const handleFile = async (e) => {
@@ -151,12 +182,50 @@ export default function IncomeReport() {
 
   const current = selectedYear ? reports?.find(r => r.year === selectedYear) : null
 
+  const handleTaxParse = () => {
+    setTaxError('')
+    try {
+      const rows = parseTaxPasteText(taxPasteText)
+      if (!rows.length) throw new Error('파싱 결과가 없습니다. 탭으로 구분된 납부일자/세목/납부세액 형식인지 확인하세요.')
+      setTaxPreview(rows)
+    } catch (err) {
+      setTaxError('파싱 오류: ' + err.message)
+    }
+  }
+
+  const handleTaxSave = async () => {
+    if (!taxPreview) return
+    setTaxSaving(true)
+    setTaxError('')
+    try {
+      await saveTaxPayments(user.uid, taxPreview)
+      await loadTaxPayments()
+      setTaxPreview(null)
+      setTaxPasteText('')
+      setTaxPasteOpen(false)
+    } catch (err) {
+      setTaxError('저장 오류: ' + err.message)
+    }
+    setTaxSaving(false)
+  }
+
+  const handleTaxDeleteRow = async (docId) => {
+    await deleteDocument(user.uid, 'taxPayments', docId)
+    await loadTaxPayments()
+  }
+
+  const handleTaxDeleteAll = async () => {
+    if (!window.confirm('세금납부내역 전체를 삭제하시겠습니까?')) return
+    await deleteCollectionData(user.uid, 'taxPayments')
+    await loadTaxPayments()
+  }
+
   if (loading) return <div className="loading">로딩 중...</div>
 
   return (
     <div className="page">
       <div className="page-heading-row">
-        <h2 className="page-heading">이자·배당 소득</h2>
+        <h2 className="page-heading">이자·배당·세금</h2>
         <span className="dim" style={{ marginLeft: 'auto', fontSize: 12 }}>키움 금융소득내역서 확인</span>
         <button style={btnStyle} onClick={() => fileRef.current?.click()}>
           + 엑셀 등록
@@ -250,6 +319,92 @@ export default function IncomeReport() {
       {!preview && !reports?.length && (
         <div className="empty">등록된 데이터가 없습니다. 엑셀 파일을 등록하세요.</div>
       )}
+
+      {/* 세금납부내역 */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="section-header" style={{ marginBottom: 8 }}>
+          <span className="section-title">세금납부내역</span>
+          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+            <button style={cancelBtnStyle} onClick={() => setTaxPasteOpen(o => !o)}>
+              {taxPasteOpen ? '취소' : '+ 붙여넣기 등록'}
+            </button>
+            {taxPayments.length > 0 && (
+              <button style={cancelBtnStyle} onClick={handleTaxDeleteAll}>전체 삭제</button>
+            )}
+          </div>
+        </div>
+
+        {taxPasteOpen && (
+          <div style={{ marginBottom: 12 }}>
+            <p className="dim" style={{ fontSize: 12, marginBottom: 6 }}>
+              납부일자, 세목, 납부세액 순서로 탭 구분해 붙여넣기 (엑셀에서 복사한 그대로)
+            </p>
+            <textarea
+              value={taxPasteText}
+              onChange={e => setTaxPasteText(e.target.value)}
+              rows={6}
+              style={textareaStyle}
+              placeholder={'2025-06-23\t양도소득세\t11,110,470'}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button style={btnStyle} onClick={handleTaxParse}>미리보기</button>
+              {taxPreview && (
+                <button style={{ ...btnStyle, opacity: taxSaving ? 0.5 : 1 }} onClick={handleTaxSave} disabled={taxSaving}>
+                  {taxSaving ? '저장 중...' : `${taxPreview.length}건 저장`}
+                </button>
+              )}
+            </div>
+            {taxError && <p style={{ color: '#f87171', fontSize: 13, marginTop: 8 }}>{taxError}</p>}
+            {taxPreview && (
+              <div className="table-wrap" style={{ marginTop: 10 }}>
+                <table className="data-table">
+                  <thead>
+                    <tr><th>납부일자</th><th>세목</th><th className="r">납부세액</th></tr>
+                  </thead>
+                  <tbody>
+                    {taxPreview.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.date}</td>
+                        <td>{r.taxType}</td>
+                        <td className="r">{fmt(r.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {taxPayments.length > 0 ? (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr><th>납부일자</th><th>세목</th><th className="r">납부세액</th><th></th></tr>
+              </thead>
+              <tbody>
+                {taxPayments.map(r => (
+                  <tr key={r.docId}>
+                    <td>{r.date}</td>
+                    <td>{r.taxType}</td>
+                    <td className="r">{fmt(r.amount)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button style={cancelBtnStyle} onClick={() => handleTaxDeleteRow(r.docId)}>삭제</button>
+                    </td>
+                  </tr>
+                ))}
+                <tr className="total-row">
+                  <td colSpan={2} style={{ fontWeight: 700 }}>합계</td>
+                  <td className="r bold">{fmt(taxPayments.reduce((s, r) => s + (r.amount || 0), 0))}</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          !taxPasteOpen && <div className="empty">등록된 세금납부내역이 없습니다.</div>
+        )}
+      </div>
     </div>
   )
 }
@@ -336,4 +491,10 @@ const btnStyle = {
 const cancelBtnStyle = {
   background: 'transparent', color: '#64748b', border: '1px solid #334155',
   borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12,
+}
+
+const textareaStyle = {
+  width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+  padding: '12px', color: '#f1f5f9', fontSize: 13, fontFamily: 'monospace',
+  resize: 'vertical', boxSizing: 'border-box',
 }

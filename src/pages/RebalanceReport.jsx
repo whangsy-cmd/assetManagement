@@ -1,19 +1,12 @@
+// 리밸런싱 리포트 — 켈리/셰넌 기준 리밸런싱 계산
 import { useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
 import { getLatestHoldings, getAccounts, getAllAccountEval, getSectors, getLoans, getRebalanceSettings, saveRebalanceSettings } from '../utils/firestore'
-import { getAccountCategory, LOAN_ACCOUNT_ID } from '../utils/holdingsAgg'
+import { LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, latestCashByAccount } from '../utils/holdingsAgg'
+import { fmt, sgn, pc } from '../utils/format'
 import '../common.css'
 
-function fmt(n) {
-  if (!n && n !== 0) return '-'
-  const abs = Math.abs(n), sign = n < 0 ? '-' : ''
-  if (abs >= 1e8) return sign + (abs / 1e8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '억'
-  if (abs >= 1e4) return sign + Math.round(abs / 1e4).toLocaleString() + '만'
-  return Math.round(n).toLocaleString()
-}
-function sgn(v) { return v >= 0 ? '+' : '' }
-function pc(v) { return v >= 0 ? 'pos' : 'neg' }
 function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)) }
 function mean(a) { return a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0 }
 function variance(a) { const m = mean(a); return a.length ? mean(a.map(x => (x - m) ** 2)) : 0 }
@@ -67,26 +60,11 @@ export default function RebalanceReport() {
   // 계좌별평가(accountEval)를 날짜별 국내/해외/연금 잔액으로 합산 (기존 snapshots 대체)
   const accCatMap = Object.fromEntries(accounts.map(a => [a.accountId, a.category]))
   const evalRows = accountEval.filter(r => r.accountId !== LOAN_ACCOUNT_ID)
-  const rowsByAccount = new Map()
-  for (const r of evalRows) {
-    if (!rowsByAccount.has(r.accountId)) rowsByAccount.set(r.accountId, [])
-    rowsByAccount.get(r.accountId).push(r)
-  }
-  for (const arr of rowsByAccount.values()) arr.sort((a, b) => a.date.localeCompare(b.date))
-  const cashByAccount = new Map([...rowsByAccount].map(([id, arr]) => [id, arr.at(-1)?.cashAmt || 0]))
-  function categorySumsAsOf(asOfDate) {
-    const sums = { pension: 0, domestic: 0, overseas: 0 }
-    for (const [accountId, arr] of rowsByAccount) {
-      let latestRow = null
-      for (const r of arr) { if (r.date > asOfDate) break; latestRow = r }
-      if (!latestRow) continue
-      sums[getAccountCategory(accountId, accCatMap)] += latestRow.totalAmt || 0
-    }
-    return sums
-  }
+  const rowsByAccount = buildRowsByAccount(evalRows)
+  const cashByAccount = latestCashByAccount(rowsByAccount)
   const evalDates = [...new Set(evalRows.map(r => r.date))].sort()
   const snapshots = evalDates.map(date => {
-    const s = categorySumsAsOf(date)
+    const s = categorySumsAsOf(rowsByAccount, date, accCatMap)
     return { date, pension: { balance: s.pension }, domestic: { balance: s.domestic }, overseas: { balance: s.overseas } }
   })
 

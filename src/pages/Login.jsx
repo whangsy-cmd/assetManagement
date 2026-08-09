@@ -1,3 +1,4 @@
+// 로그인 화면 (Google 로그인)
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 

@@ -1,8 +1,10 @@
+// 계좌 관리 화면 (계좌 등록/수정/삭제, 대출금 관리)
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useAccounts } from '../hooks/useAccounts'
 import { getLoans, saveLoan, deleteLoan, getKiwoomKeys, saveKiwoomKeys } from '../utils/firestore'
 import { clearKiwoomKeysCache } from '../utils/kiwoomApi'
+import '../common.css'
 
 const INITIAL_ACCOUNTS = [
   { accountId: '010-9786-1102-1', broker: 'mirae', category: 'pension',  name: '미래에셋 연금저축', type: 'stock' },
@@ -133,7 +135,7 @@ export default function AccountSetup() {
   if (loading) return <div style={styles.loading}>로딩 중...</div>
 
   if (error) return (
-    <div style={styles.container}>
+    <div className="page">
       <h2 style={styles.heading}>계좌 관리</h2>
       <div style={styles.errorBox}>
         <strong>Firestore 연결 오류</strong>
@@ -146,7 +148,7 @@ export default function AccountSetup() {
   )
 
   return (
-    <div style={styles.container}>
+    <div className="page">
       <h2 style={styles.heading}>계좌 관리</h2>
 
       {accounts.length === 0 && (
@@ -355,7 +357,6 @@ export default function AccountSetup() {
 }
 
 const styles = {
-  container: { maxWidth: 1250, margin: '0 auto', padding: '24px 16px' },
   loading: { color: '#94a3b8', padding: 40, textAlign: 'center' },
   heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, marginBottom: 24 },
   initBox: { background: '#1e293b', borderRadius: 10, padding: '20px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' },

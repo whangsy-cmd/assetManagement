@@ -1,3 +1,4 @@
+// 라우팅 설정 — 로그인 여부에 따라 Login 또는 페이지 레이아웃 렌더
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'

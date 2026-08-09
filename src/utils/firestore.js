@@ -1,3 +1,4 @@
+// Firestore CRUD 모음 — users/{uid} 하위 컬렉션(holdings/accountEval/accounts 등) 읽기/쓰기/삭제
 import {
   doc, setDoc, getDoc, getDocs, collection, deleteDoc,
   serverTimestamp, writeBatch,
@@ -32,17 +33,6 @@ export async function saveHoldings(uid, date, holdings) {
     const id = `${date}_${h.accountId}_${h.code}`
     const ref = doc(db, 'users', uid, 'holdings', id)
     batch.set(ref, { ...h, id, date, createdAt: serverTimestamp() })
-  }
-  await batch.commit()
-}
-
-// ── 예수금 저장 ─────────────────────────────────────────────
-export async function saveCash(uid, date, cashList) {
-  const batch = writeBatch(db)
-  for (const c of cashList) {
-    const id = `${date}_${c.accountId}`
-    const ref = doc(db, 'users', uid, 'cash', id)
-    batch.set(ref, { ...c, id, date, createdAt: serverTimestamp() })
   }
   await batch.commit()
 }
@@ -235,6 +225,25 @@ export async function getIncomeReports(uid) {
 // ── 이자·배당 소득 단건 삭제 ────────────────────────────────
 export async function deleteIncomeReport(uid, year) {
   await deleteDoc(doc(db, 'users', uid, 'incomeReports', String(year)))
+}
+
+// ── 세금납부내역 저장 (납부일자_세목 기준 중복방지) ─────────
+export async function saveTaxPayments(uid, rows) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = writeBatch(db)
+    for (const r of rows.slice(i, i + 500)) {
+      const id = `${r.date}_${r.taxType}`
+      const ref = doc(db, 'users', uid, 'taxPayments', id)
+      batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
+    }
+    await batch.commit()
+  }
+}
+
+// ── 세금납부내역 전체 조회 ───────────────────────────────────
+export async function getAllTaxPayments(uid) {
+  const snap = await getDocs(collection(db, 'users', uid, 'taxPayments'))
+  return snap.docs.map(d => ({ docId: d.id, ...d.data() })).sort((a, b) => b.date.localeCompare(a.date))
 }
 
 // ── 특정 날짜 전체 삭제 ─────────────────────────────────────

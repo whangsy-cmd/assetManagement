@@ -1,3 +1,4 @@
+// Firebase Google 로그인 상태 Context
 import { createContext, useContext, useEffect, useState } from 'react'
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth'
 import { auth, provider } from '../firebase'
