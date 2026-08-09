@@ -9,9 +9,6 @@ import SectorManager from './pages/SectorManager'
 import DataView from './pages/DataView'
 import SchemaView from './pages/SchemaView'
 import KiwoomTest from './pages/KiwoomTest'
-import Migration from './pages/Migration'
-import AccountEvalMigration from './pages/AccountEvalMigration'
-import TempAccountBalance from './pages/TempAccountBalance'
 import IncomeReport from './pages/IncomeReport'
 import RebalanceReport from './pages/RebalanceReport'
 import ShannonSimulation from './pages/ShannonSimulation'
@@ -39,9 +36,6 @@ function PrivateRoutes() {
         <Route path="/kiwoom-test" element={<KiwoomTest />} />
         <Route path="/accounts" element={<AccountSetup />} />
         <Route path="/sectors" element={<SectorManager />} />
-        <Route path="/migrate" element={<Migration />} />
-        <Route path="/migrate-account-eval" element={<AccountEvalMigration />} />
-        <Route path="/temp-balance" element={<TempAccountBalance />} />
         <Route path="/income" element={<IncomeReport />} />
         <Route path="/rebalance" element={<RebalanceReport />} />
         <Route path="/shannon-sim" element={<ShannonSimulation />} />

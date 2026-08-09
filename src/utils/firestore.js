@@ -139,20 +139,6 @@ export async function getAllHoldings(uid) {
     .sort((a, b) => b.date.localeCompare(a.date))
 }
 
-// ── 전체 예수금 조회 (데이터 조회용) ───────────────────────
-export async function getAllCash(uid) {
-  const snap = await getDocs(collection(db, 'users', uid, 'cash'))
-  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
-    .sort((a, b) => b.date.localeCompare(a.date))
-}
-
-// ── 전체 스냅샷 조회 (데이터 조회용) ───────────────────────
-export async function getAllSnapshots(uid) {
-  const snap = await getDocs(collection(db, 'users', uid, 'snapshots'))
-  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
-    .sort((a, b) => b.date.localeCompare(a.date))
-}
-
 // ── 입출금내역 저장 (거래번호 기준 중복방지) ────────────────
 export async function saveCashFlows(uid, rows) {
   const noAccount = rows.find(r => !r.accountId)
@@ -197,25 +183,6 @@ export async function saveAccountEval(uid, rows) {
 
 export async function getAllAccountEval(uid) {
   const snap = await getDocs(collection(db, 'users', uid, 'accountEval'))
-  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
-    .sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
-}
-
-// ── 임시 계좌 일별 잔고 저장/조회 (브로커 리포트 붙여넣기 이전용) ──
-export async function saveTempAccountBalance(uid, rows) {
-  for (let i = 0; i < rows.length; i += 500) {
-    const batch = writeBatch(db)
-    for (const r of rows.slice(i, i + 500)) {
-      const id = `${r.date}_${r.accountId}`
-      const ref = doc(db, 'users', uid, 'tempAccountDailyBalance', id)
-      batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
-    }
-    await batch.commit()
-  }
-}
-
-export async function getAllTempAccountBalance(uid) {
-  const snap = await getDocs(collection(db, 'users', uid, 'tempAccountDailyBalance'))
   return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
     .sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
 }
