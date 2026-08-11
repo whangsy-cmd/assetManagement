@@ -17,6 +17,7 @@ export default function CashFlowsTab() {
   const [loadError, setLoadError] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedAccount, setSelectedAccount] = useState('')
+  const [selectedMemo, setSelectedMemo] = useState('전체')
   const [modal, setModal] = useState(null) // { type: 'date'|'account'|'all', date?, accountId?, count }
   const [deleting, setDeleting] = useState(false)
 
@@ -38,8 +39,10 @@ export default function CashFlowsTab() {
 
   const sorted = [...data].sort((a, b) => b.date.localeCompare(a.date) || (b.time || '').localeCompare(a.time || ''))
     .filter(d => selectedAccount === '전체' || d.accountId === selectedAccount)
+    .filter(d => selectedMemo === '전체' || d.memo === selectedMemo)
   const dates = [...new Set(data.map(d => d.date))].sort().reverse()
   const accountIds = [...new Set(data.map(d => d.accountId))].sort()
+  const memos = [...new Set(data.map(d => d.memo).filter(Boolean))].sort()
 
   // 순입출금(순이체) = 적요가 "이체"로 시작하는 행만 합산
   // 순소득 = "이체"로 시작하지 않고, 대체입금/대체출금/대체외화입금/대체외화출금 4가지도 아닌 나머지 전부 합산
@@ -123,6 +126,11 @@ export default function CashFlowsTab() {
           <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)} style={styles.stockSelect}>
             <option value="전체">전체</option>
             {accountIds.map(id => <option key={id} value={id}>{id}</option>)}
+          </select>
+          <span style={styles.toolLabel}>적요 선택</span>
+          <select value={selectedMemo} onChange={e => setSelectedMemo(e.target.value)} style={styles.stockSelect}>
+            <option value="전체">전체</option>
+            {memos.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
         <div style={styles.toolRight}>

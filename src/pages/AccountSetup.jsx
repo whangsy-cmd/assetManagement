@@ -136,8 +136,7 @@ export default function AccountSetup() {
   if (loading) return <div style={styles.loading}>로딩 중...</div>
 
   if (error) return (
-    <div className="page">
-      <h2 style={styles.heading}>계좌 관리</h2>
+    <div>
       <div style={styles.errorBox}>
         <strong>Firestore 연결 오류</strong>
         <p style={{ margin: '8px 0 0', fontSize: 13 }}>{error}</p>
@@ -149,9 +148,7 @@ export default function AccountSetup() {
   )
 
   return (
-    <div className="page">
-      <h2 style={styles.heading}>계좌 관리</h2>
-
+    <div>
       {accounts.length === 0 && (
         <div style={styles.initBox}>
           <p style={styles.initText}>미래에셋 기본 계좌 4개를 한 번에 등록합니다.</p>
@@ -373,7 +370,6 @@ export default function AccountSetup() {
 
 const styles = {
   loading: { color: '#94a3b8', padding: 40, textAlign: 'center' },
-  heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, marginBottom: 24 },
   initBox: { background: '#1e293b', borderRadius: 10, padding: '20px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
   initText: { color: '#94a3b8', margin: 0, flex: 1 },
   initBtn: { background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' },

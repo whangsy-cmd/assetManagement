@@ -1,9 +1,8 @@
 // Firestore CRUD 모음 — users/{uid} 하위 컬렉션(holdings/accountEval/accounts 등) 읽기/쓰기/삭제
 import {
   doc, setDoc, getDoc, getDocs, collection, deleteDoc,
-  serverTimestamp, writeBatch,
+  serverTimestamp, writeBatch, query, where,
 } from 'firebase/firestore'
-import { lookupSector } from './sectorLookup'
 import { db } from '../firebase'
 
 // ── 컬렉션 전체 삭제 (500개 단위 배치) ─────────────────────
@@ -33,37 +32,6 @@ export async function saveHoldings(uid, date, holdings) {
     const id = `${date}_${h.accountId}_${h.code}`
     const ref = doc(db, 'users', uid, 'holdings', id)
     batch.set(ref, { ...h, id, date, createdAt: serverTimestamp() })
-  }
-  await batch.commit()
-}
-
-// ── 섹터 자동 생성 (신규 종목은 거래소 섹터 자동 조회) ──────
-export async function ensureSectors(uid, holdings) {
-  const uniqueCodes = [...new Set(holdings.map(h => h.code).filter(Boolean))]
-  if (!uniqueCodes.length) return
-
-  // 이미 등록된 코드 확인 (병렬)
-  const snaps = await Promise.all(
-    uniqueCodes.map(code => getDoc(doc(db, 'users', uid, 'sectors', code)))
-  )
-  const newCodes = uniqueCodes.filter((_, i) => !snaps[i].exists())
-  if (!newCodes.length) return
-
-  // 신규 종목만 섹터 조회 (병렬)
-  const holdingByCode = Object.fromEntries(holdings.map(h => [h.code, h]))
-  const resolved = await Promise.all(
-    newCodes.map(async code => ({
-      code,
-      name: holdingByCode[code]?.name || '',
-      sector: (await lookupSector(code)) ?? '미분류',
-    }))
-  )
-
-  const batch = writeBatch(db)
-  for (const { code, name, sector } of resolved) {
-    batch.set(doc(db, 'users', uid, 'sectors', code), {
-      code, name, sector, memo: '', updatedAt: serverTimestamp(),
-    })
   }
   await batch.commit()
 }
@@ -177,6 +145,25 @@ export async function getAllAccountEval(uid) {
     .sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
 }
 
+// ── 실현손익 저장/조회 (일자+계좌+종목코드 기준 중복방지) ────
+export async function saveRealizedProfits(uid, rows) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = writeBatch(db)
+    for (const r of rows.slice(i, i + 500)) {
+      const id = r.code ? `${r.date}_${r.accountId}_${r.code}` : `${r.date}_${r.accountId}`
+      const ref = doc(db, 'users', uid, 'realizedProfits', id)
+      batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
+    }
+    await batch.commit()
+  }
+}
+
+export async function getAllRealizedProfits(uid) {
+  const snap = await getDocs(collection(db, 'users', uid, 'realizedProfits'))
+  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
+}
+
 // ── 컬렉션 원본 문서 전체 조회 (백업용, 가공 없음) ──────────
 export async function getAllDocsRaw(uid, colName) {
   const snap = await getDocs(collection(db, 'users', uid, colName))
@@ -243,6 +230,24 @@ export async function saveTaxPayments(uid, rows) {
 // ── 세금납부내역 전체 조회 ───────────────────────────────────
 export async function getAllTaxPayments(uid) {
   const snap = await getDocs(collection(db, 'users', uid, 'taxPayments'))
+  return snap.docs.map(d => ({ docId: d.id, ...d.data() })).sort((a, b) => b.date.localeCompare(a.date))
+}
+
+// ── 거래내역 저장/조회 (계좌+일자+거래종류+종목 기준 중복방지) ──
+export async function saveTransactions(uid, rows) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = writeBatch(db)
+    for (const r of rows.slice(i, i + 500)) {
+      const id = `${r.accountId}_${r.date}_${r.type}_${r.code || r.name || 'cash'}`.replace(/\//g, '-')
+      const ref = doc(db, 'users', uid, 'transactions', id)
+      batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
+    }
+    await batch.commit()
+  }
+}
+
+export async function getTransactionsByAccount(uid, accountId) {
+  const snap = await getDocs(query(collection(db, 'users', uid, 'transactions'), where('accountId', '==', accountId)))
   return snap.docs.map(d => ({ docId: d.id, ...d.data() })).sort((a, b) => b.date.localeCompare(a.date))
 }
 

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../../contexts/AuthContext'
-import { getAllHoldings, getAllAccountEval, deleteDateData, deleteCollectionData } from '../../utils/firestore'
+import { getAllHoldings, getAllAccountEval, getSectors, deleteDateData, deleteCollectionData } from '../../utils/firestore'
 import { LOAN_ACCOUNT_ID } from '../../utils/holdingsAgg'
 import DeleteModal from '../../components/DeleteModal'
 import { fmt, DateSelect, styles } from './shared'
@@ -11,6 +11,7 @@ import { fmt, DateSelect, styles } from './shared'
 export default function HoldingsTab() {
   const { user } = useAuth()
   const [data, setData] = useState([])
+  const [sectors, setSectors] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState('')
   const [modal, setModal] = useState(null) // { type: 'row'|'date'|'all', docId?, date?, count }
@@ -18,16 +19,21 @@ export default function HoldingsTab() {
 
   const load = async () => {
     setLoading(true)
-    const rows = await getAllHoldings(user.uid)
+    const [rows, sec] = await Promise.all([getAllHoldings(user.uid), getSectors(user.uid)])
     setData(rows)
+    setSectors(sec)
     if (rows.length && !selectedDate) setSelectedDate(rows[0].date)
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
+  const sectorMap = Object.fromEntries(sectors.map(s => [s.code, s.sector || '미분류']))
+  const sectorOf = row => sectorMap[row.code] || '미분류'
+
   const dates = [...new Set(data.map(d => d.date))].sort().reverse()
   const filtered = data.filter(d => d.date === selectedDate)
+    .sort((a, b) => a.accountId.localeCompare(b.accountId) || sectorOf(a).localeCompare(sectorOf(b)) || (a.name || '').localeCompare(b.name || ''))
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -104,6 +110,7 @@ export default function HoldingsTab() {
               <th style={styles.th}>계좌</th>
               <th style={styles.th}>코드</th>
               <th style={styles.th}>종목명</th>
+              <th style={styles.th}>섹터</th>
               <th style={{ ...styles.th, textAlign: 'right' }}>수량</th>
               <th style={{ ...styles.th, textAlign: 'right' }}>매입금액</th>
               <th style={{ ...styles.th, textAlign: 'right' }}>평가금액</th>
@@ -112,18 +119,22 @@ export default function HoldingsTab() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(row => (
-              <tr key={row.docId} style={styles.tr}>
-                <td style={styles.td}>{row.accountId}</td>
-                <td style={styles.td}><code style={styles.code}>{row.code}</code></td>
-                <td style={styles.td}>{row.name}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.qty)}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.purchaseAmt)}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.evalAmt)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: row.gainLoss >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.gainLoss)}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: row.returnRate >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.returnRate).toFixed(2)}%</td>
-              </tr>
-            ))}
+            {filtered.map((row, i) => {
+              const groupStart = i === 0 || row.accountId !== filtered[i - 1].accountId
+              return (
+                <tr key={row.docId} style={{ ...styles.tr, borderTop: groupStart && i > 0 ? '2px solid #334155' : undefined }}>
+                  <td style={styles.td}>{row.accountId}</td>
+                  <td style={styles.td}><code style={styles.code}>{row.code}</code></td>
+                  <td style={styles.td}>{row.name}</td>
+                  <td style={styles.td}>{sectorOf(row)}</td>
+                  <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.qty)}</td>
+                  <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.purchaseAmt)}</td>
+                  <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.evalAmt)}</td>
+                  <td style={{ ...styles.td, textAlign: 'right', color: row.gainLoss >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.gainLoss)}</td>
+                  <td style={{ ...styles.td, textAlign: 'right', color: row.returnRate >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.returnRate).toFixed(2)}%</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

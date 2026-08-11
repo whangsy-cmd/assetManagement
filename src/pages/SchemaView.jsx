@@ -5,7 +5,7 @@ import { getAllDocsRaw } from '../utils/firestore'
 import '../common.css'
 
 // settings(키움 API 키 등 시크릿 포함)는 제외
-const COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'taxPayments', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance']
+const COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'taxPayments', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance', 'realizedProfits', 'transactions']
 const SAMPLE_SIZE = 3
 
 const DESCRIPTIONS = {
@@ -22,6 +22,8 @@ const DESCRIPTIONS = {
   optionMonthlyProfit: '옵션계좌 월별 손익 (브로커 제공값 직접 입력) — 2026/8/9 기준 더이상 사용안함',
   accountEval: '계좌별 평가 (holdings+cash 합산 결과)',
   tempAccountDailyBalance: '임시계좌일별잔고 (증권사 리포트 붙여넣기 이전용 임시 테이블) — 2026/8/9 기준 더이상 사용안함',
+  realizedProfits: '실현손익 (일자/계좌/종목코드/종목명/실현손익/수수료, 종목 없는 계좌단위 손익도 포함)',
+  transactions: '거래내역 (브로커 3종 통합 — 매매/입출금 등 전체, 일자+종목+거래종류 동일건 합산)',
 }
 
 function getType(v) {

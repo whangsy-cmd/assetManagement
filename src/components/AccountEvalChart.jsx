@@ -1,7 +1,7 @@
 // 계좌별평가(accountEval) 기반 총자산 변동 추이 스택 영역 차트 (Dashboard/계좌평가이전 공용)
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
-const CHART_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16']
+const CHART_COLORS = ['#e2703a', '#0ea5b7', '#e0b94f', '#2f6fed', '#8b6cf0', '#38b28a', '#c65a8a', '#4fa8dc', '#d97b3f', '#7c8ba1']
 
 // 스택 순서 (아래→위): 선물옵션 → 연금 등 나머지 → 국내 → 해외
 const CATEGORY_RANK = { '선물옵션': 0, '연금': 1, '국내': 2, '해외': 3 }

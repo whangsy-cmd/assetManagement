@@ -4,19 +4,20 @@ import * as XLSX from 'xlsx'
 import { useAuth } from '../contexts/AuthContext'
 import { getAllDocsRaw } from '../utils/firestore'
 import HoldingsTab from './dataview/HoldingsTab'
-import CashTab from './dataview/CashTab'
 import AccountEvalTab from './dataview/AccountEvalTab'
 import SnapshotsTab from './dataview/SnapshotsTab'
 import CashFlowsTab from './dataview/CashFlowsTab'
 import StockPeriodTab from './dataview/StockPeriodTab'
+import RealizedProfitTab from './dataview/RealizedProfitTab'
+import TransactionsTab from './dataview/TransactionsTab'
 import { styles } from './dataview/shared'
 import '../common.css'
 
 // 탭 목록과 아래 렌더 스위치(tab === i)의 순서가 반드시 일치해야 함
-const TABS = ['보유종목', '일자별 계좌', '계좌별 조회', '계좌통합 조회', '입출금내역', '종목별 조회']
+const TABS = ['보유종목', '계좌평가 조회', '계좌통합 조회', '입출금내역', '종목별 조회', '실현손익 조회', '거래내역']
 
 // 백업 대상 컬렉션. settings(키움 API 키 등 시크릿 포함)는 의도적으로 제외.
-const BACKUP_COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'taxPayments', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance']
+const BACKUP_COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'taxPayments', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance', 'realizedProfits', 'transactions']
 
 // 중첩 객체/배열은 복원 시 그대로 복구할 수 있도록 JSON 문자열로 넣는다. 감사용 타임스탬프는 제외.
 function flattenDoc(obj) {
@@ -70,11 +71,12 @@ export default function DataView() {
 
       <div style={styles.content}>
         {tab === 0 && <HoldingsTab />}
-        {tab === 1 && <CashTab />}
-        {tab === 2 && <AccountEvalTab />}
-        {tab === 3 && <SnapshotsTab />}
-        {tab === 4 && <CashFlowsTab />}
-        {tab === 5 && <StockPeriodTab />}
+        {tab === 1 && <AccountEvalTab />}
+        {tab === 2 && <SnapshotsTab />}
+        {tab === 3 && <CashFlowsTab />}
+        {tab === 4 && <StockPeriodTab />}
+        {tab === 5 && <RealizedProfitTab />}
+        {tab === 6 && <TransactionsTab />}
       </div>
     </div>
   )

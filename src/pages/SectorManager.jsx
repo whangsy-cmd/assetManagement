@@ -11,13 +11,13 @@ export default function SectorManager() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState({})
   const [saving, setSaving] = useState(null)
-  const [filter, setFilter] = useState('all')
+  const [filter, setFilter] = useState('classified')
   const [modal, setModal] = useState(null) // { type: 'row'|'all', code?, count }
   const [deleting, setDeleting] = useState(false)
 
   const load = async () => {
     const data = await getSectors(user.uid)
-    setSectors(data.sort((a, b) => a.sector.localeCompare(b.sector)))
+    setSectors(data.sort((a, b) => a.sector.localeCompare(b.sector) || (a.name || '').localeCompare(b.name || '')))
     setLoading(false)
   }
 
@@ -55,24 +55,30 @@ export default function SectorManager() {
 
   const displayed = filter === 'unclassified'
     ? sectors.filter(s => s.sector === '미분류')
-    : sectors
+    : filter === 'classified'
+      ? sectors.filter(s => s.sector !== '미분류')
+      : sectors
 
   if (loading) return <div style={styles.loading}>로딩 중...</div>
 
   return (
-    <div className="page">
-      <h2 style={styles.heading}>섹터 관리</h2>
+    <div>
       <div style={styles.toolbar}>
         <div style={styles.left}>
           <span style={styles.count}>총 {sectors.length}개 종목</span>
           <div style={styles.filters}>
-            <button style={filter === 'all' ? styles.filterActive : styles.filterBtn} onClick={() => setFilter('all')}>전체</button>
+            <button style={filter === 'classified' ? styles.filterActive : styles.filterBtn} onClick={() => setFilter('classified')}>
+              분류 ({sectors.filter(s => s.sector !== '미분류').length})
+            </button>
             <button style={filter === 'unclassified' ? styles.filterActive : styles.filterBtn} onClick={() => setFilter('unclassified')}>
               미분류 ({sectors.filter(s => s.sector === '미분류').length})
             </button>
+            <button style={filter === 'all' ? styles.filterActive : styles.filterBtn} onClick={() => setFilter('all')}>전체</button>
           </div>
         </div>
-        <button style={styles.allDelBtn} onClick={openDeleteAll}>전체 삭제</button>
+        <div style={styles.right}>
+          <button style={styles.allDelBtn} onClick={openDeleteAll}>전체 삭제</button>
+        </div>
       </div>
 
       <div style={styles.tableWrap}>
@@ -144,9 +150,9 @@ export default function SectorManager() {
 
 const styles = {
   loading: { color: '#94a3b8', padding: 40, textAlign: 'center' },
-  heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, marginBottom: 16 },
   toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12 },
   left: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+  right: { display: 'flex', alignItems: 'center', gap: 8 },
   count: { color: '#64748b', fontSize: 13 },
   filters: { display: 'flex', gap: 8 },
   filterBtn: { background: '#1e293b', color: '#94a3b8', border: 'none', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13 },
