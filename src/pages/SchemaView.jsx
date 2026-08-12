@@ -5,25 +5,25 @@ import { getAllDocsRaw } from '../utils/firestore'
 import '../common.css'
 
 // settings(키움 API 키 등 시크릿 포함)는 제외
-const COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'taxPayments', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance', 'realizedProfits', 'transactions']
-const SAMPLE_SIZE = 3
+const COLLECTIONS = ['accountEval', 'realizedProfits', 'transactions', 'holdings', 'accounts', 'sectors', 'loans', 'incomeReports', 'taxPayments', 'priceSeries', 'cashFlows', 'cash', 'snapshots', 'optionMonthlyProfit', 'tempAccountDailyBalance']
+const SAMPLE_SIZE = 5
 
 const DESCRIPTIONS = {
+  accountEval: '계좌별 평가 (holdings+cash 합산 결과)',
+  realizedProfits: '실현손익 (일자/계좌/종목코드/종목명/실현손익/수수료, 종목 없는 계좌단위 손익도 포함)',
+  transactions: '거래내역 (매매/입출금 등 전체, 일자+종목+거래종류 동일건 합산)',
   holdings: '보유종목 (날짜별 계좌별 종목 수량/매입금액/평가금액)',
-  cash: '예수금 (날짜별 계좌별 잔액) — 2026/8/9 기준 더이상 사용안함',
-  snapshots: '자산 스냅샷 (날짜별 국내/해외/연금 잔액, 총잔액, 대출, 순자산) — 2026/8/9 기준 더이상 사용안함',
-  accounts: '계좌 목록 (계좌번호, 카테고리 등 설정)',
-  sectors: '종목별 섹터 분류',
+  accounts: '계좌 목록 (계좌번호, 계좌유형 등 설정)',
+  sectors: '종목코드, 섹터 분류',
   loans: '대출금 목록',
   incomeReports: '연도별 이자·배당 소득 리포트',
   taxPayments: '세금납부내역 (납부일자/세목/납부세액)',
   priceSeries: '종목별 과거 일별 시세 캐시 (셰넌 시뮬레이션용)',
   cashFlows: '계좌별 입출금내역',
+  cash: '예수금 (날짜별 계좌별 잔액) — 2026/8/9 기준 더이상 사용안함',
+  snapshots: '자산 스냅샷 (날짜별 국내/해외/연금 잔액, 총잔액, 대출, 순자산) — 2026/8/9 기준 더이상 사용안함',
   optionMonthlyProfit: '옵션계좌 월별 손익 (브로커 제공값 직접 입력) — 2026/8/9 기준 더이상 사용안함',
-  accountEval: '계좌별 평가 (holdings+cash 합산 결과)',
   tempAccountDailyBalance: '임시계좌일별잔고 (증권사 리포트 붙여넣기 이전용 임시 테이블) — 2026/8/9 기준 더이상 사용안함',
-  realizedProfits: '실현손익 (일자/계좌/종목코드/종목명/실현손익/수수료, 종목 없는 계좌단위 손익도 포함)',
-  transactions: '거래내역 (브로커 3종 통합 — 매매/입출금 등 전체, 일자+종목+거래종류 동일건 합산)',
 }
 
 function getType(v) {

@@ -6,7 +6,7 @@ import StockCodeManager from './StockCodeManager'
 import { styles } from './dataview/shared'
 import '../common.css'
 
-const TABS = ['계좌 관리', '섹터 관리', '종목코드 관리']
+const TABS = ['계좌 관리', '섹터 관리', '종목코드 등록']
 
 export default function DataManage() {
   const [tab, setTab] = useState(0)

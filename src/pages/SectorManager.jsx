@@ -17,7 +17,7 @@ export default function SectorManager() {
 
   const load = async () => {
     const data = await getSectors(user.uid)
-    setSectors(data.sort((a, b) => a.sector.localeCompare(b.sector) || (a.name || '').localeCompare(b.name || '')))
+    setSectors(data.sort((a, b) => (a.name || '').localeCompare(b.name || '')))
     setLoading(false)
   }
 

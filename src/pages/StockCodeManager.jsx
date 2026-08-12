@@ -75,14 +75,14 @@ export default function StockCodeManager() {
 
   return (
     <div>
-      <p style={styles.desc}>HTS 종목 조회 화면(등락률/수익률/시가총액 또는 등락률/거래량/자금유입 포맷)을 Ctrl+A → Ctrl+C 한 뒤 아래에 붙여넣으면 종목코드·종목명만 추출해 등록합니다. 이미 등록된 코드는 이름만 갱신되고 섹터 분류는 유지됩니다.</p>
+      <p style={styles.desc}>관심종목 복사, 종목코드, 종목명이 첫번째 컬럼이어야 함.</p>
 
       <textarea
         style={styles.textarea}
         value={text}
         onChange={e => { setText(e.target.value); setRows(null); setError(''); setSavedMsg('') }}
         onPaste={handlePaste}
-        placeholder="HTS 조회 화면 Ctrl+A → Ctrl+C → 여기에 Ctrl+V"
+        placeholder="관심종목 복사"
         rows={8}
       />
 
