@@ -347,11 +347,11 @@ export default function HoldingsInputTab() {
         }
         await fetchStep(2, fetchUsLedger, transformUsHoldings)
         await fetchStep(3, fetchUsCashDetail, transformUsCash)
-      } catch (_) {}
+      } catch { /* 백그라운드 자동조회 실패는 무시 — 사용자가 해당 스텝을 수동/붙여넣기로 진행 가능 */ }
       setUsLoading(false)
     }
     run()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [usAccountId])
 
   // 마운트 시 kiwoom_kr 백그라운드 자동조회 (step 0, 1)
@@ -371,11 +371,11 @@ export default function HoldingsInputTab() {
         }
         await fetchStep(0, fetchKrHoldings, transformKrHoldings)
         await fetchStep(1, fetchKrCash, transformKrCash)
-      } catch (_) {}
+      } catch { /* 백그라운드 자동조회 실패는 무시 — 사용자가 해당 스텝을 수동/붙여넣기로 진행 가능 */ }
       setKrLoading(false)
     }
     run()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [krAccountId])
 
   const handleSaveAndSnapshot = async () => {

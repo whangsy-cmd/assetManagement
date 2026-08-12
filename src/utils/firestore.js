@@ -27,13 +27,15 @@ export async function countCollection(uid, colName) {
 
 // ── 보유종목 저장 ───────────────────────────────────────────
 export async function saveHoldings(uid, date, holdings) {
-  const batch = writeBatch(db)
-  for (const h of holdings) {
-    const id = `${date}_${h.accountId}_${h.code}`
-    const ref = doc(db, 'users', uid, 'holdings', id)
-    batch.set(ref, { ...h, id, date, createdAt: serverTimestamp() })
+  for (let i = 0; i < holdings.length; i += 500) {
+    const batch = writeBatch(db)
+    for (const h of holdings.slice(i, i + 500)) {
+      const id = `${date}_${h.accountId}_${h.code}`
+      const ref = doc(db, 'users', uid, 'holdings', id)
+      batch.set(ref, { ...h, id, date, createdAt: serverTimestamp() })
+    }
+    await batch.commit()
   }
-  await batch.commit()
 }
 
 // ── 대출금 CRUD ─────────────────────────────────────────────

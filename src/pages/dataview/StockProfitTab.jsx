@@ -2,12 +2,15 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllTransactions, getAllRealizedProfits, getAllHoldings } from '../../utils/firestore'
+import { getUsdKrwRate } from '../../utils/exchangeRate'
+import { toKrw } from '../../utils/currency'
 import { fmt } from './shared'
 
 export default function StockProfitTab() {
   const { user } = useAuth()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
+  const [usdRate, setUsdRate] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -15,11 +18,15 @@ export default function StockProfitTab() {
       .then(([txs, realized, holdings]) => {
         const nameByCode = new Map()
         const realizedByCode = new Map()
+        // 해외 거래 fee/tax는 USD 원화(₩) 혼합 방지 위해 통화별로 따로 누적
         const feeTaxByCode = new Map()
         for (const t of txs) {
           if (!t.code) continue
           nameByCode.set(t.code, t.name || nameByCode.get(t.code))
-          feeTaxByCode.set(t.code, (feeTaxByCode.get(t.code) || 0) + (t.fee || 0) + (t.tax || 0))
+          const cur = feeTaxByCode.get(t.code) || { krw: 0, usd: 0 }
+          const amt = (t.fee || 0) + (t.tax || 0)
+          if (t.currency === 'USD') cur.usd += amt; else cur.krw += amt
+          feeTaxByCode.set(t.code, cur)
         }
         for (const r of realized) {
           if (!r.code) continue
@@ -40,11 +47,13 @@ export default function StockProfitTab() {
         const out = [...nameByCode.keys()].map(code => {
           const realizedProfit = realizedByCode.get(code) || 0
           const evalGainLoss = evalByCode.get(code) || 0
+          const ft = feeTaxByCode.get(code) || { krw: 0, usd: 0 }
           return {
             code,
             name: nameByCode.get(code) || code,
             realizedProfit,
-            feeTax: feeTaxByCode.get(code) || 0,
+            feeTaxKrw: ft.krw,
+            feeTaxUsd: ft.usd,
             evalGainLoss,
             heldAmt: heldAmtByCode.get(code) || 0,
             totalProfit: realizedProfit + evalGainLoss,
@@ -54,15 +63,19 @@ export default function StockProfitTab() {
         setRows(out)
         setLoading(false)
       })
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    getUsdKrwRate(today).then(setUsdRate).catch(() => setUsdRate(null))
   }, [])
 
-  const totals = rows.reduce((s, r) => ({
+  const totalsRaw = rows.reduce((s, r) => ({
     realizedProfit: s.realizedProfit + r.realizedProfit,
-    feeTax: s.feeTax + r.feeTax,
+    feeTaxKrw: s.feeTaxKrw + r.feeTaxKrw,
+    feeTaxUsd: s.feeTaxUsd + r.feeTaxUsd,
     evalGainLoss: s.evalGainLoss + r.evalGainLoss,
     heldAmt: s.heldAmt + r.heldAmt,
     totalProfit: s.totalProfit + r.totalProfit,
-  }), { realizedProfit: 0, feeTax: 0, evalGainLoss: 0, heldAmt: 0, totalProfit: 0 })
+  }), { realizedProfit: 0, feeTaxKrw: 0, feeTaxUsd: 0, evalGainLoss: 0, heldAmt: 0, totalProfit: 0 })
+  const totals = { ...totalsRaw, feeTax: toKrw(totalsRaw.feeTaxKrw, totalsRaw.feeTaxUsd, usdRate) }
 
   const cls = v => v > 0 ? 'pos' : v < 0 ? 'neg' : ''
 
@@ -88,7 +101,7 @@ export default function StockProfitTab() {
               <tr key={r.code}>
                 <td>{r.name} ({r.code})</td>
                 <td className={'r ' + cls(r.realizedProfit)}>{fmt(r.realizedProfit)}</td>
-                <td className="r">{fmt(r.feeTax)}</td>
+                <td className="r">{fmt(Math.round(toKrw(r.feeTaxKrw, r.feeTaxUsd, usdRate)))}</td>
                 <td className={'r ' + cls(r.evalGainLoss)}>{fmt(r.evalGainLoss)}</td>
                 <td className="r">{fmt(r.heldAmt)}</td>
                 <td className={'r bold ' + cls(r.totalProfit)}>{fmt(r.totalProfit)}</td>
@@ -99,7 +112,7 @@ export default function StockProfitTab() {
             <tr className="total-row">
               <td className="bold">합계</td>
               <td className={'r bold ' + cls(totals.realizedProfit)}>{fmt(totals.realizedProfit)}</td>
-              <td className="r bold">{fmt(totals.feeTax)}</td>
+              <td className="r bold">{fmt(Math.round(totals.feeTax))}</td>
               <td className={'r bold ' + cls(totals.evalGainLoss)}>{fmt(totals.evalGainLoss)}</td>
               <td className="r bold">{fmt(totals.heldAmt)}</td>
               <td className={'r bold ' + cls(totals.totalProfit)}>{fmt(totals.totalProfit)}</td>

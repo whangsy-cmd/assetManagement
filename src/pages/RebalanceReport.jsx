@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { getLatestHoldings, getAccounts, getAllAccountEval, getSectors, getLoans, getRebalanceSettings, saveRebalanceSettings } from '../utils/firestore'
 import { LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, latestCashByAccount } from '../utils/holdingsAgg'
 import { fmt, sgn, pc } from '../utils/format'
+import { maxDrawdown } from '../utils/finance'
+import InputField, { numInputStyle } from '../components/InputField'
 import '../common.css'
 
 function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)) }
@@ -286,12 +288,6 @@ function simulateShannon(history, riskyWeightPct, bandPct) {
   }
   return path
 }
-function maxDrawdown(path) {
-  let peak = path[0], dd = 0
-  for (const v of path) { peak = Math.max(peak, v); dd = Math.min(dd, v / peak - 1) }
-  return dd
-}
-
 function ShannonPool({ poolLabel, holdings, cashTotal, sectors, settings, onSettingsChange, dates, history }) {
   const sectorMap = Object.fromEntries(sectors.map(s => [s.code, s.sector || '미분류']))
   const sectorAgg = {}
@@ -462,17 +458,4 @@ function ShannonPool({ poolLabel, holdings, cashTotal, sectors, settings, onSett
   )
 }
 
-function InputField({ label, children }) {
-  return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#94a3b8' }}>
-      {label}
-      {children}
-    </label>
-  )
-}
-
-const numInputStyle = {
-  background: '#0f172a', color: '#f1f5f9', border: '1px solid #334155',
-  borderRadius: 6, padding: '5px 8px', fontSize: 13, width: 80,
-}
 const selectStyle = { ...numInputStyle, width: 90 }

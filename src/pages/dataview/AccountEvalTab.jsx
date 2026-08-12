@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useAccounts } from '../../hooks/useAccounts'
 import { getAllAccountEval, getAllTransactions, getAllRealizedProfits, deleteDocument } from '../../utils/firestore'
 import { getUsdKrwRate } from '../../utils/exchangeRate'
+import { toKrw } from '../../utils/currency'
 import { fmt } from './shared'
 
 // 순수 계좌이체(은행 입출금)만 순증감에서 제외 — 배당금/이자/분배금 등 손익성 입출금은 포함
@@ -21,7 +22,7 @@ function currencySum(items, matchFn, signFn, usdRate) {
     const v = signFn(t)
     if (t.currency === 'USD') usd += v; else krw += v
   }
-  return krw + usd * (usdRate || 0)
+  return toKrw(krw, usd, usdRate)
 }
 
 // ── 계좌평가 조회 탭 (계좌별평가 테이블 원본 조회) ────────────────

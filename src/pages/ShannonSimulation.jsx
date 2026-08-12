@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { getSavedSymbols, getPriceSeries, downloadMissingRange, addDays, parseCsvPrices, saveCsvPrices } from '../utils/priceData'
 import { deleteDocument } from '../utils/firestore'
 import { sgn, pc } from '../utils/format'
+import { maxDrawdown } from '../utils/finance'
+import InputField, { numInputStyle } from '../components/InputField'
 import '../common.css'
 
 const TODAY = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -50,12 +52,6 @@ function simulateTwoAsset(dates, riskyCloseOf, safeCloseOf, safeAnnualDividendPc
 function RebalanceDot({ cx, cy, payload }) {
   if (!payload.rebalanced) return null
   return <circle cx={cx} cy={cy} r={4} fill="#f59e0b" stroke="#78350f" strokeWidth={1} />
-}
-
-function maxDrawdown(series) {
-  let peak = series[0], dd = 0
-  for (const v of series) { peak = Math.max(peak, v); dd = Math.min(dd, v / peak - 1) }
-  return dd
 }
 
 export default function ShannonSimulation() {
@@ -449,18 +445,4 @@ function SimulationTab({ user, savedSymbols }) {
   )
 }
 
-function InputField({ label, children }) {
-  return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#94a3b8' }}>
-      {label}
-      {children}
-    </label>
-  )
-}
-
 const boxStyle = { minWidth: 280, flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 10, padding: 14 }
-
-const numInputStyle = {
-  background: '#0f172a', color: '#f1f5f9', border: '1px solid #334155',
-  borderRadius: 6, padding: '5px 8px', fontSize: 13, width: 80,
-}

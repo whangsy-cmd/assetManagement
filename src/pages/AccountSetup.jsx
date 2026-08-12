@@ -14,7 +14,7 @@ const INITIAL_ACCOUNTS = [
 ]
 
 const BROKER_LABEL = { mirae: '미래에셋', kiwoom_kr: '키움 국내', kiwoom_us: '키움 해외', ibk: '기업은행' }
-export const CATEGORY_LABEL = { domestic: '국내', overseas: '해외', pension: '연금', futures: '선물옵션', irp: '연금', isa: '연금', general: '국내' }
+const CATEGORY_LABEL = { domestic: '국내', overseas: '해외', pension: '연금', futures: '선물옵션' }
 
 export default function AccountSetup() {
   const { user } = useAuth()

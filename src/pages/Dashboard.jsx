@@ -240,7 +240,7 @@ export default function Dashboard() {
   const sectorStockTotal = Object.values(sectorAgg).reduce((a, b) => a + b, 0)
   const cashInSector = totalBalance - sectorStockTotal
   if (cashInSector > 0) sectorAgg['예수금'] = (sectorAgg['예수금'] || 0) + cashInSector
-  const netDenom  = latest.netBalance || sectorStockTotal || 1
+  const netDenom  = totalBalance || 1
   const sectorData = Object.entries(sectorAgg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
   const categoryData = [
     ...Object.entries(latestSums).map(([cat, value]) => ({
@@ -323,7 +323,7 @@ export default function Dashboard() {
   const monthlyAvgRate = cumulativeRate / months
 
   // 종목별 비중 (코드별 합산 → 섹터별 그룹)
-  const totalBal = (overseas + domestic + pension) || 1
+  const totalBal = totalBalance || 1
   const codeAgg = {}
   for (const h of holdings) {
     if (!codeAgg[h.code]) codeAgg[h.code] = { code: h.code, name: h.name || h.code, evalAmt: 0, purchaseAmt: 0, gainLoss: 0 }

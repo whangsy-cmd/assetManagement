@@ -59,7 +59,7 @@ const CRUD_ROWS = [
   { group: '조회', name: '실현손익 조회', crud: { realizedProfits: 'RUD' } },
   { group: '조회', name: '보유종목', crud: { holdings: 'RD', accountEval: 'R', sectors: 'R' } },
   { group: '조회', name: '거래내역', crud: { transactions: 'RD', accounts: 'R' } },
-  { group: '조회', name: '종목별 조회', crud: { transactions: 'R' } },
+  { group: '조회', name: '종목별 조회', crud: { transactions: 'R', realizedProfits: 'R' } },
   { group: '조회', name: '종목별 손익', crud: { transactions: 'R', realizedProfits: 'R', holdings: 'R' } },
   { group: '기타', name: '리밸런싱', crud: { holdings: 'R', accounts: 'R', accountEval: 'R', sectors: 'R', loans: 'R', settings: 'RU' } },
   { group: '기타', name: '셰넌 시뮬레이션', crud: { priceSeries: 'CRUD' } },

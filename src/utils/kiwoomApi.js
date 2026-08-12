@@ -11,7 +11,12 @@ let _uid = null
 let _keysCache = null
 
 export function setKiwoomAuthUid(uid) {
-  if (uid !== _uid) _keysCache = null
+  if (uid !== _uid) {
+    _keysCache = null
+    // uid가 바뀌면 이전 사용자의 키움 API 토큰도 무효화 (교차 계정 오염 방지)
+    _tokens.kr = _tokens.us = null
+    _expiry.kr = _expiry.us = 0
+  }
   _uid = uid
 }
 
