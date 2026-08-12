@@ -147,7 +147,7 @@ export default function AccountSetup() {
 
   if (error) return (
     <div>
-      <div style={styles.errorBox}>
+      <div className="alert-error">
         <strong>Firestore 연결 오류</strong>
         <p style={{ margin: '8px 0 0', fontSize: 13 }}>{error}</p>
         <p className="text-muted" style={{ margin: '8px 0 0', fontSize: 12 }}>
@@ -233,7 +233,7 @@ export default function AccountSetup() {
                   )}
                 </td>
                 <td>
-                  <div style={styles.actions}>
+                  <div className="btn-group">
                     {editingId === acc.id ? (
                       <>
                         <button className="btn btn-primary btn-sm" onClick={() => handleEditSave(acc)} disabled={saving}>저장</button>
@@ -254,8 +254,8 @@ export default function AccountSetup() {
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <h3 style={styles.formTitle}>계좌 추가</h3>
-        <form onSubmit={handleAdd} style={styles.form}>
+        <h3 className="section-title" style={{ marginBottom: 16 }}>계좌 추가</h3>
+        <form onSubmit={handleAdd} className="form-row">
           <input
             className="input"
             style={{ flex: 2, minWidth: 140 }}
@@ -290,7 +290,7 @@ export default function AccountSetup() {
 
       {/* 대출금 관리 */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <h3 style={styles.formTitle}>대출금 관리</h3>
+        <h3 className="section-title" style={{ marginBottom: 16 }}>대출금 관리</h3>
         <p className="text-muted" style={{ marginBottom: 16 }}>현재 대출 잔액을 등록하면 스냅샷 생성 시 순자산에 반영됩니다.</p>
 
         {loans.length > 0 && (
@@ -317,7 +317,7 @@ export default function AccountSetup() {
                         : <span className="neg">-{loan.amount?.toLocaleString()}원</span>}
                     </td>
                     <td>
-                      <div style={styles.actions}>
+                      <div className="btn-group">
                         {editingLoan?.id === loan.id ? (
                           <>
                             <button className="btn btn-primary btn-sm" onClick={() => handleSaveLoan(loan)} disabled={loanSaving}>저장</button>
@@ -345,7 +345,7 @@ export default function AccountSetup() {
           </div>
         )}
 
-        <form onSubmit={handleAddLoan} style={{ ...styles.form, marginTop: 12 }}>
+        <form onSubmit={handleAddLoan} className="form-row" style={{ marginTop: 12 }}>
           <input
             className="input"
             style={{ flex: 2, minWidth: 140 }}
@@ -370,14 +370,14 @@ export default function AccountSetup() {
 
       {/* 키움 API 키 */}
       <div className="card">
-        <h3 style={styles.formTitle}>키움 API 키</h3>
+        <h3 className="section-title" style={{ marginBottom: 16 }}>키움 API 키</h3>
         <p className="text-muted" style={{ marginBottom: 16 }}>
           국내: {kiwoomStatus.kr ? <span className="pos">등록됨</span> : <span className="neg">미등록</span>}
           {'  ·  '}
           해외: {kiwoomStatus.us ? <span className="pos">등록됨</span> : <span className="neg">미등록</span>}
           <br />저장 후에는 값이 표시되지 않습니다. 변경하려면 새 값을 입력 후 저장하세요.
         </p>
-        <form onSubmit={handleSaveKiwoom} style={styles.form}>
+        <form onSubmit={handleSaveKiwoom} className="form-row">
           <input className="input" style={{ flex: 2, minWidth: 140 }} placeholder="국내 appkey" type="password" value={kiwoomForm.kr_appkey} onChange={e => setKiwoomForm(f => ({ ...f, kr_appkey: e.target.value }))} />
           <input className="input" style={{ flex: 2, minWidth: 140 }} placeholder="국내 secretkey" type="password" value={kiwoomForm.kr_secretkey} onChange={e => setKiwoomForm(f => ({ ...f, kr_secretkey: e.target.value }))} />
           <input className="input" style={{ flex: 2, minWidth: 140 }} placeholder="해외 appkey" type="password" value={kiwoomForm.us_appkey} onChange={e => setKiwoomForm(f => ({ ...f, us_appkey: e.target.value }))} />
@@ -390,11 +390,4 @@ export default function AccountSetup() {
 
     </div>
   )
-}
-
-const styles = {
-  errorBox: { background: '#450a0a', border: '1px solid #ef4444', borderRadius: 10, padding: '16px 20px', color: '#fca5a5' },
-  actions: { display: 'flex', gap: 6 },
-  formTitle: { color: '#f1f5f9', fontSize: 16, fontWeight: 600, marginBottom: 16 },
-  form: { display: 'flex', gap: 10, flexWrap: 'wrap' },
 }

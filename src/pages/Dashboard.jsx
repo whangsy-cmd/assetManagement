@@ -2,7 +2,8 @@
 import { Fragment, useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
-import { getLatestHoldings, getAccounts, getAllAccountEval, getSectors, getRebalanceSettings, getLoans, getAllRealizedProfits } from '../utils/firestore'
+import { useAccounts } from '../hooks/useAccounts'
+import { getLatestHoldings, getAllAccountEval, getSectors, getRebalanceSettings, getLoans, getAllRealizedProfits } from '../utils/firestore'
 import { getAccountCategory, LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, sumCategoryValues, latestCashByAccount } from '../utils/holdingsAgg'
 import AccountEvalChart from '../components/AccountEvalChart'
 import { fmt, sgn, pc } from '../utils/format'
@@ -150,8 +151,8 @@ function AggregateTable({ rows, categories }) {
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const { accounts } = useAccounts()
   const [holdings, setHoldings] = useState([])
-  const [accounts, setAccounts] = useState([])
   const [accountEval, setAccountEval] = useState([])
   const [realizedProfits, setRealizedProfits] = useState([])
   const [loans, setLoans] = useState([])
@@ -164,14 +165,13 @@ export default function Dashboard() {
     if (!user) return
     Promise.all([
       getLatestHoldings(user.uid),
-      getAccounts(user.uid),
       getAllAccountEval(user.uid),
       getSectors(user.uid),
       getRebalanceSettings(user.uid),
       getLoans(user.uid),
       getAllRealizedProfits(user.uid),
-    ]).then(([h, acc, ae, sec, st, ln, rp]) => {
-      setHoldings(h); setAccounts(acc); setAccountEval(ae); setSectors(sec)
+    ]).then(([h, ae, sec, st, ln, rp]) => {
+      setHoldings(h); setAccountEval(ae); setSectors(sec)
       setRebalanceSettings(st || {})
       setLoans(ln)
       setRealizedProfits(rp)

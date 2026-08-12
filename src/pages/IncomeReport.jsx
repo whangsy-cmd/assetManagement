@@ -227,13 +227,13 @@ export default function IncomeReport() {
       <div className="page-heading-row">
         <h2 className="page-heading">이자·배당·세금</h2>
         <span className="dim" style={{ marginLeft: 'auto', fontSize: 12 }}>키움 금융소득내역서 확인</span>
-        <button style={btnStyle} onClick={() => fileRef.current?.click()}>
+        <button className="btn btn-sm" style={{ background: '#7c3aed', color: '#fff' }} onClick={() => fileRef.current?.click()}>
           + 엑셀 등록
         </button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFile} />
       </div>
 
-      {error && <p style={{ color: '#f87171', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+      {error && <p className="text-error" style={{ marginBottom: 12 }}>{error}</p>}
 
       {/* 엑셀 파싱 미리보기 */}
       {preview && (
@@ -241,8 +241,8 @@ export default function IncomeReport() {
           <div className="section-header">
             <span className="section-title">{preview.year}년 미리보기</span>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button style={cancelBtnStyle} onClick={() => setPreview(null)}>취소</button>
-              <button style={{ ...btnStyle, opacity: saving ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
+              <button className="btn btn-outline btn-sm" onClick={() => setPreview(null)}>취소</button>
+              <button className="btn btn-sm" style={{ background: '#7c3aed', color: '#fff' }} onClick={handleSave} disabled={saving}>
                 {saving ? '저장 중...' : '저장'}
               </button>
             </div>
@@ -293,7 +293,7 @@ export default function IncomeReport() {
                       <td className="r purple bold">{fmt(net)}</td>
                       <td style={{ textAlign: 'right' }}>
                         <button
-                          style={cancelBtnStyle}
+                          className="btn btn-outline btn-sm"
                           onClick={ev => { ev.stopPropagation(); handleDelete(r.year) }}
                         >삭제</button>
                       </td>
@@ -325,11 +325,11 @@ export default function IncomeReport() {
         <div className="section-header" style={{ marginBottom: 8 }}>
           <span className="section-title">세금납부내역</span>
           <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-            <button style={cancelBtnStyle} onClick={() => setTaxPasteOpen(o => !o)}>
+            <button className="btn btn-outline btn-sm" onClick={() => setTaxPasteOpen(o => !o)}>
               {taxPasteOpen ? '취소' : '+ 붙여넣기 등록'}
             </button>
             {taxPayments.length > 0 && (
-              <button style={cancelBtnStyle} onClick={handleTaxDeleteAll}>전체 삭제</button>
+              <button className="btn btn-outline btn-sm" onClick={handleTaxDeleteAll}>전체 삭제</button>
             )}
           </div>
         </div>
@@ -340,21 +340,21 @@ export default function IncomeReport() {
               납부일자, 세목, 납부세액 순서로 탭 구분해 붙여넣기 (엑셀에서 복사한 그대로)
             </p>
             <textarea
+              className="textarea"
               value={taxPasteText}
               onChange={e => setTaxPasteText(e.target.value)}
               rows={6}
-              style={textareaStyle}
               placeholder={'2025-06-23\t양도소득세\t11,110,470'}
             />
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button style={btnStyle} onClick={handleTaxParse}>미리보기</button>
+              <button className="btn btn-sm" style={{ background: '#7c3aed', color: '#fff' }} onClick={handleTaxParse}>미리보기</button>
               {taxPreview && (
-                <button style={{ ...btnStyle, opacity: taxSaving ? 0.5 : 1 }} onClick={handleTaxSave} disabled={taxSaving}>
+                <button className="btn btn-sm" style={{ background: '#7c3aed', color: '#fff' }} onClick={handleTaxSave} disabled={taxSaving}>
                   {taxSaving ? '저장 중...' : `${taxPreview.length}건 저장`}
                 </button>
               )}
             </div>
-            {taxError && <p style={{ color: '#f87171', fontSize: 13, marginTop: 8 }}>{taxError}</p>}
+            {taxError && <p className="text-error" style={{ marginTop: 8 }}>{taxError}</p>}
             {taxPreview && (
               <div className="table-wrap" style={{ marginTop: 10 }}>
                 <table className="data-table">
@@ -389,7 +389,7 @@ export default function IncomeReport() {
                     <td>{r.taxType}</td>
                     <td className="r">{fmt(r.amount)}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <button style={cancelBtnStyle} onClick={() => handleTaxDeleteRow(r.docId)}>삭제</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => handleTaxDeleteRow(r.docId)}>삭제</button>
                     </td>
                   </tr>
                 ))}
@@ -483,18 +483,3 @@ function TotalRow({ items, label, bold, cols }) {
   )
 }
 
-const btnStyle = {
-  background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8,
-  padding: '7px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13,
-}
-
-const cancelBtnStyle = {
-  background: 'transparent', color: '#64748b', border: '1px solid #334155',
-  borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12,
-}
-
-const textareaStyle = {
-  width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-  padding: '12px', color: '#f1f5f9', fontSize: 13, fontFamily: 'monospace',
-  resize: 'vertical', boxSizing: 'border-box',
-}

@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
-import { getLatestHoldings, getAccounts, getAllAccountEval, getSectors, getLoans, getRebalanceSettings, saveRebalanceSettings } from '../utils/firestore'
+import { useAccounts } from '../hooks/useAccounts'
+import { getLatestHoldings, getAllAccountEval, getSectors, getLoans, getRebalanceSettings, saveRebalanceSettings } from '../utils/firestore'
 import { LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, latestCashByAccount } from '../utils/holdingsAgg'
 import { fmt, sgn, pc } from '../utils/format'
 import { maxDrawdown } from '../utils/finance'
@@ -15,8 +16,8 @@ function variance(a) { const m = mean(a); return a.length ? mean(a.map(x => (x -
 
 export default function RebalanceReport() {
   const { user } = useAuth()
+  const { accounts } = useAccounts()
   const [holdings, setHoldings] = useState([])
-  const [accounts, setAccounts] = useState([])
   const [accountEval, setAccountEval] = useState([])
   const [sectors, setSectors] = useState([])
   const [loans, setLoans] = useState([])
@@ -29,13 +30,12 @@ export default function RebalanceReport() {
     if (!user) return
     Promise.all([
       getLatestHoldings(user.uid),
-      getAccounts(user.uid),
       getAllAccountEval(user.uid),
       getSectors(user.uid),
       getLoans(user.uid),
       getRebalanceSettings(user.uid),
-    ]).then(([h, acc, s, sec, ln, st]) => {
-      setHoldings(h); setAccounts(acc); setAccountEval(s); setSectors(sec); setLoans(ln)
+    ]).then(([h, s, sec, ln, st]) => {
+      setHoldings(h); setAccountEval(s); setSectors(sec); setLoans(ln)
       setSettings(st || {})
       setLoading(false)
     })
@@ -162,7 +162,7 @@ function KellyTab({ snapshots, latest, holdings, cashByAccount, accounts, loanTo
     <>
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="section-title" style={{ marginBottom: 10 }}>기준 입력</div>
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+        <div className="form-row" style={{ gap: 20 }}>
           <InputField label="관측 기간(최근 N주)">
             <select value={windowN} onChange={e => setWindowN(Number(e.target.value))} style={selectStyle}>
               <option value={8}>8주</option>
@@ -345,7 +345,7 @@ function ShannonPool({ poolLabel, holdings, cashTotal, sectors, settings, onSett
         <h3 className="section-title">{poolLabel}</h3>
       </div>
 
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+      <div className="form-row" style={{ gap: 20, alignItems: 'flex-end', marginBottom: 14 }}>
         <InputField label="목표 안전자산 배분비율(%)">
           <input type="number" value={safeRatio} onChange={e => setSafeRatio(Number(e.target.value))} style={numInputStyle} />
         </InputField>
@@ -355,7 +355,7 @@ function ShannonPool({ poolLabel, holdings, cashTotal, sectors, settings, onSett
       </div>
 
       <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>안전자산 지정 (체크한 섹터 = 안전자산)</div>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div className="form-row" style={{ gap: 14, marginBottom: 14 }}>
         {names.map(name => (
           <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#e2e8f0', cursor: 'pointer' }}>
             <input type="checkbox" checked={safeSet.has(name)} onChange={() => toggleSafe(name)} />

@@ -77,7 +77,7 @@ function RealizedProfitCard({ title, fixedAccount, missingMsg, selectableAccount
   }
 
   return (
-    <div className="card" style={{ margin: 0 }}>
+    <div className="card card-flat">
       <div className="section-header">
         <h3 className="section-title">{title}</h3>
         {selectableAccounts ? (
@@ -179,11 +179,11 @@ function ManualEntryCard({ accounts }) {
   }
 
   return (
-    <div className="card" style={{ margin: 0 }}>
+    <div className="card card-flat">
       <div className="section-header">
         <h3 className="section-title">직접 입력 (정해진 포맷 없는 계좌 1회성 등록)</h3>
       </div>
-      <div style={styles.manualRow}>
+      <div className="form-row">
         <select className="select input-sm" value={accountId} onChange={e => setAccountId(e.target.value)}>
           {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} ({a.accountId})</option>)}
         </select>
@@ -253,8 +253,4 @@ export default function RealizedProfitTab() {
       <ManualEntryCard accounts={accounts} />
     </div>
   )
-}
-
-const styles = {
-  manualRow: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
 }

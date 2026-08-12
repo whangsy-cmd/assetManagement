@@ -83,7 +83,7 @@ function PasteTxCard({ title, account, accounts, selectedAccountId, onSelectAcco
   }
 
   return (
-    <div className="card" style={{ margin: 0 }}>
+    <div className="card card-flat">
       <div className="section-header">
         <h3 className="section-title">{title}</h3>
         {account ? (
@@ -202,11 +202,11 @@ function TransferEntryCard({ accounts }) {
   }
 
   return (
-    <div className="card" style={{ margin: 0 }}>
+    <div className="card card-flat">
       <div className="section-header">
         <h3 className="section-title">이체입금/출금 등록</h3>
       </div>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="form-row">
         <select value={accountId} onChange={e => setAccountId(e.target.value)} className="select input-sm">
           <option value="">계좌 선택</option>
           {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} ({a.accountId})</option>)}

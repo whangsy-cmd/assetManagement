@@ -26,7 +26,7 @@ export default function DataInput() {
         ))}
       </div>
 
-      <div className="card" style={{ margin: 0 }}>
+      <div className="card card-flat">
         {tab === 0 && <HoldingsInputTab />}
         {tab === 1 && <RealizedProfitTab />}
         {tab === 2 && <TransactionsInputTab />}

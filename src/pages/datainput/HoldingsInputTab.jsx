@@ -138,11 +138,11 @@ function AccountEvalManualCard({ accounts }) {
   }
 
   return (
-    <div className="card" style={{ margin: 0 }}>
+    <div className="card card-flat">
       <div className="section-header">
         <h3 className="section-title">계좌평가 수기 등록</h3>
       </div>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="form-row">
         <select value={accountId} onChange={e => setAccountId(e.target.value)} className="select input-sm">
           <option value="">계좌 선택</option>
           {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} ({a.accountId})</option>)}
@@ -434,7 +434,7 @@ export default function HoldingsInputTab() {
     <div>
       <AccountEvalManualCard accounts={accounts} />
 
-      <div style={styles.dateRow}>
+      <div className="date-row" style={{ marginBottom: 20 }}>
         <label className="field-label" style={{ marginBottom: 0 }}>기준 날짜</label>
         <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input input-sm" />
       </div>
@@ -465,7 +465,7 @@ export default function HoldingsInputTab() {
           </button>
         </div>
       ) : (
-        <div className="card" style={{ margin: 0 }}>
+        <div className="card card-flat">
           <h3 style={styles.stepLabel}>{current.label}</h3>
 
           {current.broker !== 'mirae' && (
@@ -525,7 +525,7 @@ export default function HoldingsInputTab() {
                 <div style={{ marginTop: 10 }}>
                   <p className="text-error" style={{ marginBottom: 8 }}>{error}</p>
                   {text.trim() && (
-                    <button style={styles.parseBtn} onClick={handleManualParse}>수동으로 파싱</button>
+                    <button className="btn" style={{ background: '#7c3aed', color: '#fff' }} onClick={handleManualParse}>수동으로 파싱</button>
                   )}
                 </div>
               )}
@@ -569,7 +569,6 @@ export default function HoldingsInputTab() {
 }
 
 const styles = {
-  dateRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 },
   steps: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 },
   stepItem: { background: '#1e293b', color: '#64748b', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer', border: '1px solid transparent' },
   stepActive: { background: '#1d4ed8', color: '#fff', border: '1px solid #3b82f6' },
@@ -577,7 +576,6 @@ const styles = {
   stepLabel: { color: '#f1f5f9', fontSize: 16, fontWeight: 600, marginBottom: 20 },
   row: { marginBottom: 16 },
   hint: { color: '#475569', fontSize: 12 },
-  parseBtn: { background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontWeight: 600, fontSize: 13 },
   allDoneCard: { background: '#0f2d1a', border: '1px solid #22c55e', borderRadius: 12, padding: '40px', textAlign: 'center' },
   allDoneTitle: { color: '#4ade80', fontSize: 20, fontWeight: 700, marginBottom: 10 },
   allDoneDesc: { color: '#94a3b8', fontSize: 14, marginBottom: 28 },

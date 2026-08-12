@@ -158,8 +158,8 @@ function SymbolManageTab({ user, savedSymbols, symbolsLoading, refreshSymbols })
         <button className="toggle-btn" onClick={refreshSymbols}>↺ 새로고침</button>
       </div>
 
-      <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 10, padding: 14, marginBottom: 14 }}>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <div style={{ ...boxStyle, marginBottom: 14 }}>
+        <div className="form-row" style={{ gap: 12, alignItems: 'flex-end' }}>
           <InputField label="종목코드"><input placeholder="예: 069500, AAPL" value={dlCode} onChange={e => setDlCode(e.target.value.trim())} style={{ ...numInputStyle, width: 130 }} /></InputField>
           <InputField label="종목명"><input placeholder="종목명" value={dlName} onChange={e => setDlName(e.target.value)} style={{ ...numInputStyle, width: 110 }} /></InputField>
           <InputField label="시작일"><input type="date" value={dlFrom} onChange={e => setDlFrom(e.target.value)} style={numInputStyle} /></InputField>
@@ -169,15 +169,15 @@ function SymbolManageTab({ user, savedSymbols, symbolsLoading, refreshSymbols })
           </button>
         </div>
         {dlStatus.msg && <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>{dlStatus.msg}</p>}
-        {dlStatus.error && <p style={{ color: '#f87171', fontSize: 12, marginTop: 8 }}>{dlStatus.error}</p>}
+        {dlStatus.error && <p className="text-error" style={{ marginTop: 8 }}>{dlStatus.error}</p>}
         <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>
           이미 저장된 구간은 건너뛰고 없는 구간만 내려받습니다. 6자리 숫자 코드는 국내(키움 ka10081), 그 외는 미국 종목(키움 usa06012)으로 조회합니다. 키움이 지원하지 않는 종목(레버리지 ETF 등)은 아래 CSV 가져오기를 이용하세요.
         </p>
       </div>
 
-      <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+      <div style={{ ...boxStyle, marginBottom: 14 }}>
         <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 13, marginBottom: 8 }}>CSV 파일 가져오기</div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10, alignItems: 'flex-end' }}>
+        <div className="form-row" style={{ gap: 12, marginBottom: 10, alignItems: 'flex-end' }}>
           <InputField label="종목코드"><input placeholder="예: SOXL" value={csvCode} onChange={e => setCsvCode(e.target.value.trim())} style={{ ...numInputStyle, width: 130 }} /></InputField>
           <InputField label="종목명"><input placeholder="종목명" value={csvName} onChange={e => setCsvName(e.target.value)} style={{ ...numInputStyle, width: 110 }} /></InputField>
           <InputField label="CSV 파일">
@@ -185,17 +185,18 @@ function SymbolManageTab({ user, savedSymbols, symbolsLoading, refreshSymbols })
           </InputField>
         </div>
         <textarea
+          className="textarea"
           value={csvText}
           onChange={e => setCsvText(e.target.value)}
           placeholder={'파일을 선택하면 내용이 여기 표시됩니다. 직접 붙여넣기도 가능: date,close\n2024-01-02,187.15\n...'}
           rows={5}
-          style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: 8, color: '#f1f5f9', fontSize: 12, fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }}
+          style={{ fontSize: 12, marginBottom: 8 }}
         />
         <button className="toggle-btn active" onClick={handleCsvImport} disabled={csvStatus.loading || !csvCode || !csvText}>
           {csvStatus.loading ? '가져오는 중...' : 'CSV 가져오기'}
         </button>
         {csvStatus.msg && <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>{csvStatus.msg}</p>}
-        {csvStatus.error && <p style={{ color: '#f87171', fontSize: 12, marginTop: 8 }}>{csvStatus.error}</p>}
+        {csvStatus.error && <p className="text-error" style={{ marginTop: 8 }}>{csvStatus.error}</p>}
         <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>
           Shannon/fetch_stock.py로 로컬에서 받은 결과(예: <code>python fetch_stock.py SOXL 2022-01-01 2024-12-31</code> 실행 후 출력된 date,close CSV)를 붙여넣으면 됩니다.
         </p>
@@ -337,7 +338,7 @@ function SimulationTab({ user, savedSymbols }) {
         {savedSymbols.length === 0 ? (
           <p className="dim">저장된 종목이 없습니다. 종목관리 탭에서 먼저 가격 데이터를 받아오세요.</p>
         ) : (
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          <div className="form-row" style={{ gap: 20 }}>
             <div style={boxStyle}>
               <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 14, marginBottom: 10 }}>자산 A — 위험자산 (고정)</div>
               <select value={riskyAsset.code} onChange={pickAsset(setRiskyAsset)} style={{ ...numInputStyle, width: '100%' }}>
@@ -376,7 +377,7 @@ function SimulationTab({ user, savedSymbols }) {
 
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="section-title" style={{ marginBottom: 10 }}>시뮬레이션 설정</div>
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="form-row" style={{ gap: 20, alignItems: 'flex-end' }}>
           <InputField label="시작일">
             <input type="date" value={dateFrom} min={availMin} max={availMax} onChange={e => setDateFrom(e.target.value)} style={numInputStyle} />
           </InputField>
@@ -397,7 +398,7 @@ function SimulationTab({ user, savedSymbols }) {
           </button>
         </div>
         {availMin && availMax && <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>선택한 자산의 등록 데이터 구간: {availMin} ~ {availMax}</p>}
-        {simError && <p style={{ color: '#f87171', fontSize: 13, marginTop: 10 }}>{simError}</p>}
+        {simError && <p className="text-error" style={{ marginTop: 10 }}>{simError}</p>}
       </div>
 
       {simResult && (
