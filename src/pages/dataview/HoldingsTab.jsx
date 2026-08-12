@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { getAllHoldings, getAllAccountEval, getSectors, deleteDateData, deleteCollectionData } from '../../utils/firestore'
 import { LOAN_ACCOUNT_ID } from '../../utils/holdingsAgg'
 import DeleteModal from '../../components/DeleteModal'
-import { fmt, DateSelect, styles } from './shared'
+import { fmt, DateSelect } from './shared'
 
 // ── 보유종목 탭 ─────────────────────────────────────────────
 export default function HoldingsTab() {
@@ -80,58 +80,58 @@ export default function HoldingsTab() {
     XLSX.writeFile(wb, '보유종목_예수금_전체.xlsx')
   }
 
-  if (loading) return <div style={styles.loading}>로딩 중...</div>
-  if (!data.length) return <div style={styles.empty}>저장된 보유종목 데이터가 없습니다.</div>
+  if (loading) return <div className="loading">로딩 중...</div>
+  if (!data.length) return <div className="empty">저장된 보유종목 데이터가 없습니다.</div>
 
   return (
     <div>
-      <div style={styles.toolbar}>
-        <div style={styles.dateRow}>
-          <span style={styles.toolLabel}>날짜 선택</span>
+      <div className="toolbar">
+        <div className="date-row">
+          <span className="tool-label">날짜 선택</span>
           <DateSelect id="holdings-dates" dates={dates} value={selectedDate} onChange={setSelectedDate} />
         </div>
-        <div style={styles.toolRight}>
-          <button style={styles.exportBtn} onClick={handleExport}>
+        <div className="tool-right">
+          <button className="btn btn-outline-green btn-sm" onClick={handleExport}>
             데이터 엑셀 다운로드
           </button>
-          <button style={styles.dateDel} onClick={() => setModal({ type: 'date', date: selectedDate, count: filtered.length })}>
+          <button className="btn btn-outline-orange btn-sm" onClick={() => setModal({ type: 'date', date: selectedDate, count: filtered.length })}>
             {selectedDate} 삭제
           </button>
-          <button style={styles.allDel} onClick={() => setModal({ type: 'all', count: data.length })}>
+          <button className="btn btn-outline-red btn-sm" onClick={() => setModal({ type: 'all', count: data.length })}>
             전체 삭제
           </button>
         </div>
       </div>
 
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
+      <div className="table-wrap">
+        <table className="data-table">
           <thead>
             <tr>
-              <th style={styles.th}>계좌</th>
-              <th style={styles.th}>코드</th>
-              <th style={styles.th}>종목명</th>
-              <th style={styles.th}>섹터</th>
-              <th style={{ ...styles.th, textAlign: 'right' }}>수량</th>
-              <th style={{ ...styles.th, textAlign: 'right' }}>매입금액</th>
-              <th style={{ ...styles.th, textAlign: 'right' }}>평가금액</th>
-              <th style={{ ...styles.th, textAlign: 'right' }}>평가손익</th>
-              <th style={{ ...styles.th, textAlign: 'right' }}>수익률</th>
+              <th>계좌</th>
+              <th>코드</th>
+              <th>종목명</th>
+              <th>섹터</th>
+              <th className="r">수량</th>
+              <th className="r">매입금액</th>
+              <th className="r">평가금액</th>
+              <th className="r">평가손익</th>
+              <th className="r">수익률</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((row, i) => {
               const groupStart = i === 0 || row.accountId !== filtered[i - 1].accountId
               return (
-                <tr key={row.docId} style={{ ...styles.tr, borderTop: groupStart && i > 0 ? '2px solid #334155' : undefined }}>
-                  <td style={styles.td}>{row.accountId}</td>
-                  <td style={styles.td}><code style={styles.code}>{row.code}</code></td>
-                  <td style={styles.td}>{row.name}</td>
-                  <td style={styles.td}>{sectorOf(row)}</td>
-                  <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.qty)}</td>
-                  <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.purchaseAmt)}</td>
-                  <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.evalAmt)}</td>
-                  <td style={{ ...styles.td, textAlign: 'right', color: row.gainLoss >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.gainLoss)}</td>
-                  <td style={{ ...styles.td, textAlign: 'right', color: row.returnRate >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.returnRate).toFixed(2)}%</td>
+                <tr key={row.docId} style={{ borderTop: groupStart && i > 0 ? '2px solid #334155' : undefined }}>
+                  <td>{row.accountId}</td>
+                  <td><code className="code-chip">{row.code}</code></td>
+                  <td>{row.name}</td>
+                  <td>{sectorOf(row)}</td>
+                  <td className="r">{fmt(row.qty)}</td>
+                  <td className="r">{fmt(row.purchaseAmt)}</td>
+                  <td className="r">{fmt(row.evalAmt)}</td>
+                  <td className={'r ' + (row.gainLoss >= 0 ? 'pos' : 'neg')}>{fmt(row.gainLoss)}</td>
+                  <td className={'r ' + (row.returnRate >= 0 ? 'pos' : 'neg')}>{Number(row.returnRate).toFixed(2)}%</td>
                 </tr>
               )
             })}

@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useAccounts } from '../../hooks/useAccounts'
 import { parseKiwoomKrTransactions, parseKiwoomUsTransactions, parseMiraeTransactions, parseKiwoomKrFuturesTransactions, parseKiwoomUsFuturesTransactions } from '../../utils/parsers'
 import { saveTransactions, getSectors } from '../../utils/firestore'
+import '../../common.css'
 
 // 동일 일자/종목/거래종류는 합산 — 단가는 합산 후 금액/수량으로 재계산
 function aggregateTransactions(rows) {
@@ -53,7 +54,11 @@ function PasteTxCard({ title, account, accounts, selectedAccountId, onSelectAcco
     if (!accountId) { setError('계좌를 먼저 선택하세요.'); return }
     const parsed = parseFn(rawText)
     if (!parsed.length) { setError('파싱 결과가 없습니다. 화면 전체를 복사했는지 확인하세요.'); return }
-    setRows(aggregateTransactions(parsed.map(r => fillCode({ ...r, accountId, broker }))))
+    // 거래금액/수수료/세금/청산손익이 모두 0인 의미없는 거래는 등록에서 제외
+    const aggregated = aggregateTransactions(parsed.map(r => fillCode({ ...r, accountId, broker })))
+      .filter(r => r.amount || r.fee || r.tax || r.profit)
+    if (!aggregated.length) { setError('거래금액/수수료/세금/청산손익이 모두 0인 데이터만 있습니다.'); return }
+    setRows(aggregated)
   }
 
   const handlePaste = (e) => {
@@ -78,86 +83,157 @@ function PasteTxCard({ title, account, accounts, selectedAccountId, onSelectAcco
   }
 
   return (
-    <div style={styles.cfCard}>
-      <div style={styles.cfHeadRow}>
-        <h3 style={{ ...styles.stepLabel, marginBottom: 0 }}>{title}</h3>
+    <div className="card" style={{ margin: 0 }}>
+      <div className="section-header">
+        <h3 className="section-title">{title}</h3>
         {account ? (
-          <span style={styles.cfAccountInline}>{account.name} ({account.accountId})</span>
+          <span className="text-muted">{account.name} ({account.accountId})</span>
         ) : accounts && accounts.length > 0 ? (
-          <select value={selectedAccountId} onChange={e => onSelectAccount(e.target.value)} style={styles.select}>
+          <select value={selectedAccountId} onChange={e => onSelectAccount(e.target.value)} className="select input-sm">
             <option value="">계좌 선택</option>
             {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} ({a.accountId})</option>)}
           </select>
         ) : (
-          <span style={{ color: '#f87171', fontSize: 13 }}>⚠️ {missingMsg}</span>
+          <span className="neg" style={{ fontSize: 13 }}>⚠️ {missingMsg}</span>
         )}
       </div>
 
       {accountId && (
         <>
           <textarea
-            style={styles.textarea}
+            className="textarea"
             value={text}
             onChange={e => { setText(e.target.value); setRows(null); setError('') }}
             onPaste={handlePaste}
             placeholder={placeholder}
             rows={4}
           />
-          {error && <p style={styles.error}>{error}</p>}
-          {savedMsg && <p style={{ color: '#4ade80', fontSize: 13 }}>{savedMsg}</p>}
+          {error && <p className="text-error" style={{ marginBottom: 8 }}>{error}</p>}
+          {savedMsg && <p className="text-success">{savedMsg}</p>}
         </>
       )}
 
       {rows && (
-        <div style={styles.preview}>
-          <p style={styles.previewTitle}>파싱 결과 (합산 후) — {rows.length}건</p>
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
+        <div style={{ marginTop: 16 }}>
+          <p className="section-label">파싱 결과 (합산 후) — {rows.length}건</p>
+          <div className="table-wrap">
+            <table className="data-table">
               <thead>
                 <tr>
-                  <th style={styles.th}>날짜</th>
-                  <th style={styles.th}>거래종류</th>
-                  <th style={styles.th}>종목명</th>
-                  <th style={styles.th}>종목코드</th>
-                  <th style={styles.th}>통화</th>
-                  <th style={styles.th}>수량</th>
-                  <th style={styles.th}>단가</th>
-                  <th style={styles.th}>거래금액</th>
-                  <th style={styles.th}>수수료</th>
-                  <th style={styles.th}>세금</th>
-                  <th style={styles.th}>청산손익</th>
+                  <th>날짜</th>
+                  <th>거래종류</th>
+                  <th>종목명</th>
+                  <th>종목코드</th>
+                  <th>통화</th>
+                  <th>수량</th>
+                  <th>단가</th>
+                  <th>거래금액</th>
+                  <th>수수료</th>
+                  <th>세금</th>
+                  <th>청산손익</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i} style={r.codeError ? styles.trError : undefined}>
-                    <td style={styles.td}>{r.date}</td>
-                    <td style={styles.td}>{r.type}</td>
-                    <td style={styles.td}>{r.name || '-'}</td>
-                    <td style={styles.td}>
+                    <td>{r.date}</td>
+                    <td>{r.type}</td>
+                    <td>{r.name || '-'}</td>
+                    <td>
                       {r.codeError
-                        ? <span style={styles.error} title={r.ambiguous ? r.ambiguous.join(', ') : ''}>
+                        ? <span className="text-error" title={r.ambiguous ? r.ambiguous.join(', ') : ''}>
                             ⚠️ {r.ambiguous ? `복수후보 ${r.ambiguous.length}건` : '코드 없음'}
                           </span>
                         : (r.code || '-')}
                     </td>
-                    <td style={styles.td}>{r.currency}</td>
-                    <td style={styles.td}>{r.qty ? r.qty.toLocaleString() : '-'}</td>
-                    <td style={styles.td}>{r.price ? r.price.toLocaleString() : '-'}</td>
-                    <td style={styles.td}>{r.amount.toLocaleString()}</td>
-                    <td style={styles.td}>{r.fee.toLocaleString()}</td>
-                    <td style={styles.td}>{r.tax.toLocaleString()}</td>
-                    <td style={styles.td}>{r.profit ? r.profit.toLocaleString() : '-'}</td>
+                    <td>{r.currency}</td>
+                    <td>{r.qty ? r.qty.toLocaleString() : '-'}</td>
+                    <td>{r.price ? r.price.toLocaleString() : '-'}</td>
+                    <td>{r.amount.toLocaleString()}</td>
+                    <td>{r.fee.toLocaleString()}</td>
+                    <td>{r.tax.toLocaleString()}</td>
+                    <td>{r.profit ? r.profit.toLocaleString() : '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button style={{ ...styles.apiBtn, marginTop: 14 }} onClick={handleSave} disabled={saving}>
+          <button className="btn btn-info" style={{ marginTop: 14 }} onClick={handleSave} disabled={saving}>
             {saving ? '등록 중...' : '등록'}
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+const todayKst = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+// ── 이체입금/이체출금 수기 등록 카드 ──────────────────────────
+function TransferEntryCard({ accounts }) {
+  const { user } = useAuth()
+  const [accountId, setAccountId] = useState('')
+  const [date, setDate] = useState(todayKst)
+  const [type, setType] = useState('이체입금')
+  const [currency, setCurrency] = useState('KRW')
+  const [amount, setAmount] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [savedMsg, setSavedMsg] = useState('')
+
+  const handleSave = async () => {
+    setError('')
+    setSavedMsg('')
+    if (!accountId) { setError('계좌를 선택하세요.'); return }
+    const amt = Number(String(amount).replace(/,/g, ''))
+    if (!amt) { setError('금액을 입력하세요.'); return }
+    setSaving(true)
+    try {
+      await saveTransactions(user.uid, [{
+        accountId, date, type, name: '', code: '', currency,
+        qty: 0, price: 0, amount: amt, fee: 0, tax: 0,
+      }])
+      setSavedMsg('✅ 등록 완료')
+      setAmount('')
+    } catch (e) {
+      setError('저장 오류: ' + e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="card" style={{ margin: 0 }}>
+      <div className="section-header">
+        <h3 className="section-title">이체입금/출금 등록</h3>
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select value={accountId} onChange={e => setAccountId(e.target.value)} className="select input-sm">
+          <option value="">계좌 선택</option>
+          {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} ({a.accountId})</option>)}
+        </select>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input input-sm" />
+        <select value={type} onChange={e => setType(e.target.value)} className="select input-sm">
+          <option value="이체입금">이체입금</option>
+          <option value="이체출금">이체출금</option>
+        </select>
+        <select value={currency} onChange={e => setCurrency(e.target.value)} className="select input-sm">
+          <option value="KRW">원화</option>
+          <option value="USD">달러</option>
+        </select>
+        <input
+          className="input input-sm"
+          style={{ width: 160 }}
+          placeholder="금액"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSave()}
+        />
+        <button className="btn btn-info btn-sm" onClick={handleSave} disabled={saving}>
+          {saving ? '등록 중...' : '등록'}
+        </button>
+      </div>
+      {error && <p className="text-error" style={{ marginTop: 8 }}>{error}</p>}
+      {savedMsg && <p className="text-success" style={{ marginTop: 8 }}>{savedMsg}</p>}
     </div>
   )
 }
@@ -195,9 +271,10 @@ export default function TransactionsInputTab() {
 
   return (
     <div>
-      <button style={styles.reloadBtn} onClick={handleReload} disabled={reloading}>
+      <button className="btn btn-outline btn-sm" onClick={handleReload} disabled={reloading}>
         {reloading ? '갱신 중...' : '↺ 종목코드 다시 불러오기'}
       </button>
+      <TransferEntryCard accounts={accounts} />
       <PasteTxCard
         key={`kr-tx-${krAccount?.accountId}`}
         title="키움 국내 거래내역"
@@ -258,20 +335,5 @@ export default function TransactionsInputTab() {
 }
 
 const styles = {
-  textarea: { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '12px', color: '#f1f5f9', fontSize: 13, fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box' },
-  error: { color: '#f87171', fontSize: 13, marginBottom: 8 },
-  preview: { marginTop: 16 },
-  previewTitle: { color: '#94a3b8', fontSize: 13, marginBottom: 10 },
-  tableWrap: { overflowX: 'auto' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
-  th: { background: '#0f172a', color: '#64748b', padding: '8px 10px', textAlign: 'left', whiteSpace: 'nowrap' },
-  td: { color: '#e2e8f0', padding: '7px 10px', borderBottom: '1px solid #0f172a', whiteSpace: 'nowrap' },
   trError: { background: 'rgba(248, 113, 113, 0.1)' },
-  apiBtn: { background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginRight: 10 },
-  cfCard: { background: '#1e293b', borderRadius: 12, padding: '20px 24px', marginTop: 16 },
-  cfHeadRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' },
-  cfAccountInline: { color: '#94a3b8', fontSize: 13 },
-  stepLabel: { color: '#f1f5f9', fontSize: 16, fontWeight: 600, marginBottom: 20 },
-  select: { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '6px 10px', color: '#f1f5f9', fontSize: 13 },
-  reloadBtn: { background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, padding: '7px 14px', cursor: 'pointer' },
 }

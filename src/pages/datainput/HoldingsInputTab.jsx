@@ -13,6 +13,7 @@ import {
 } from '../../utils/kiwoomApi'
 import { buildAccountEvalRows, buildLoanEvalRow } from '../../utils/holdingsAgg'
 import { saveHoldings, saveAccountEval, getSectors, getLoans } from '../../utils/firestore'
+import '../../common.css'
 
 // 기준 날짜 기본값 — 이번 주(월~일) 금요일
 const NOW_KST = new Date(Date.now() + 9 * 60 * 60 * 1000)
@@ -51,43 +52,41 @@ function MiraeCodeInput({ rows, onConfirm }) {
   }
 
   return (
-    <div style={codeStyles.box}>
+    <div style={{ marginTop: 20 }}>
       <p style={codeStyles.title}>종목코드 확인</p>
-      <p style={codeStyles.desc}>미래에셋 데이터에는 종목코드가 없습니다. 신규 종목은 코드를 직접 입력하세요.</p>
-      <div style={codeStyles.tableWrap}>
-        <table style={codeStyles.table}>
+      <p className="text-muted" style={{ marginBottom: 16 }}>미래에셋 데이터에는 종목코드가 없습니다. 신규 종목은 코드를 직접 입력하세요.</p>
+      <div className="table-wrap" style={{ marginBottom: 16 }}>
+        <table className="data-table">
           <thead>
             <tr>
-              <th style={codeStyles.th}>계좌</th>
-              <th style={codeStyles.th}>종목명</th>
-              <th style={codeStyles.th}>종목코드</th>
-              <th style={codeStyles.th}>평가금액</th>
+              <th>계좌</th>
+              <th>종목명</th>
+              <th>종목코드</th>
+              <th>평가금액</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => {
               const isNew = r.code === r.name
               return (
-                <tr key={i} style={codeStyles.tr}>
-                  <td style={codeStyles.td}>{r.accountId}</td>
-                  <td style={codeStyles.td}>{r.name}</td>
-                  <td style={codeStyles.td}>
+                <tr key={i}>
+                  <td>{r.accountId}</td>
+                  <td>{r.name}</td>
+                  <td>
                     {isNew ? (
                       <input
-                        style={{
-                          ...codeStyles.input,
-                          borderColor: codes[r.name]?.trim() ? '#22c55e' : '#ef4444',
-                        }}
+                        className="input input-sm"
+                        style={{ width: 100, borderColor: codes[r.name]?.trim() ? '#22c55e' : '#ef4444' }}
                         value={codes[r.name] || ''}
                         onChange={e => setCodes(c => ({ ...c, [r.name]: e.target.value }))}
                         placeholder="코드 입력"
                         autoFocus={i === 0}
                       />
                     ) : (
-                      <code style={codeStyles.code}>{r.code}</code>
+                      <code className="code-chip" style={{ color: '#86efac' }}>{r.code}</code>
                     )}
                   </td>
-                  <td style={codeStyles.td}>{r.evalAmt?.toLocaleString()}</td>
+                  <td>{r.evalAmt?.toLocaleString()}</td>
                 </tr>
               )
             })}
@@ -95,7 +94,8 @@ function MiraeCodeInput({ rows, onConfirm }) {
         </table>
       </div>
       <button
-        style={{ ...codeStyles.confirmBtn, opacity: allFilled ? 1 : 0.4, cursor: allFilled ? 'pointer' : 'not-allowed' }}
+        className="btn btn-accent"
+        style={{ padding: '10px 28px', opacity: allFilled ? 1 : 0.4, cursor: allFilled ? 'pointer' : 'not-allowed' }}
         onClick={handleConfirm}
         disabled={!allFilled}
       >
@@ -106,17 +106,58 @@ function MiraeCodeInput({ rows, onConfirm }) {
 }
 
 const codeStyles = {
-  box: { marginTop: 20 },
   title: { color: '#f1f5f9', fontSize: 15, fontWeight: 600, marginBottom: 6 },
-  desc: { color: '#94a3b8', fontSize: 13, marginBottom: 16 },
-  tableWrap: { overflowX: 'auto', marginBottom: 16 },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
-  th: { background: '#0f172a', color: '#64748b', padding: '8px 10px', textAlign: 'left', whiteSpace: 'nowrap' },
-  tr: { borderBottom: '1px solid #0f172a' },
-  td: { color: '#e2e8f0', padding: '8px 10px', whiteSpace: 'nowrap' },
-  input: { background: '#0f172a', border: '1px solid', borderRadius: 6, padding: '5px 8px', color: '#f1f5f9', fontSize: 13, width: 100 },
-  code: { background: '#0f172a', padding: '2px 6px', borderRadius: 4, fontSize: 12, fontFamily: 'monospace', color: '#86efac' },
-  confirmBtn: { background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+}
+
+// ── 계좌평가 수기 등록 카드 (계좌+날짜 선택 후 종목평가금액/예수금 직접 입력) ──
+function AccountEvalManualCard({ accounts }) {
+  const { user } = useAuth()
+  const [accountId, setAccountId] = useState('')
+  const [date, setDate] = useState(DEFAULT_DATE)
+  const [evalAmt, setEvalAmt] = useState('')
+  const [cashAmt, setCashAmt] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [savedMsg, setSavedMsg] = useState('')
+
+  const handleSave = async () => {
+    setError('')
+    setSavedMsg('')
+    if (!accountId) { setError('계좌를 선택하세요.'); return }
+    const ev = Number(String(evalAmt).replace(/,/g, '')) || 0
+    const ca = Number(String(cashAmt).replace(/,/g, '')) || 0
+    setSaving(true)
+    try {
+      await saveAccountEval(user.uid, [{ date, accountId, evalAmt: ev, cashAmt: ca, totalAmt: ev + ca }])
+      setSavedMsg('✅ 등록 완료')
+      setEvalAmt(''); setCashAmt('')
+    } catch (e) {
+      setError('저장 오류: ' + e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="card" style={{ margin: 0 }}>
+      <div className="section-header">
+        <h3 className="section-title">계좌평가 수기 등록</h3>
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select value={accountId} onChange={e => setAccountId(e.target.value)} className="select input-sm">
+          <option value="">계좌 선택</option>
+          {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} ({a.accountId})</option>)}
+        </select>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input input-sm" />
+        <input className="input input-sm" style={{ width: 150 }} placeholder="종목평가금액" value={evalAmt} onChange={e => setEvalAmt(e.target.value)} />
+        <input className="input input-sm" style={{ width: 150 }} placeholder="예수금" value={cashAmt} onChange={e => setCashAmt(e.target.value)} />
+        <button className="btn btn-info btn-sm" onClick={handleSave} disabled={saving}>
+          {saving ? '등록 중...' : '등록'}
+        </button>
+      </div>
+      {error && <p className="text-error" style={{ marginTop: 8 }}>{error}</p>}
+      {savedMsg && <p className="text-success" style={{ marginTop: 8 }}>{savedMsg}</p>}
+    </div>
+  )
 }
 
 // ── 메인 ─────────────────────────────────────────────────────
@@ -391,9 +432,11 @@ export default function HoldingsInputTab() {
 
   return (
     <div>
+      <AccountEvalManualCard accounts={accounts} />
+
       <div style={styles.dateRow}>
-        <label style={styles.label}>기준 날짜</label>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={styles.dateInput} />
+        <label className="field-label" style={{ marginBottom: 0 }}>기준 날짜</label>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input input-sm" />
       </div>
 
       <div style={styles.steps}>
@@ -416,20 +459,20 @@ export default function HoldingsInputTab() {
         <div style={styles.allDoneCard}>
           <p style={styles.allDoneTitle}>✅ 6개 항목 파싱 완료</p>
           <p style={styles.allDoneDesc}>아래 버튼을 누르면 전체 데이터를 저장하고 계좌별 평가 테이블에 등록합니다.</p>
-          {error && <p style={styles.error}>{error}</p>}
-          <button style={styles.snapshotBtn} onClick={handleSaveAndSnapshot} disabled={saving}>
+          {error && <p className="text-error" style={{ marginBottom: 8 }}>{error}</p>}
+          <button className="btn btn-primary" style={{ padding: '14px 40px', fontSize: 16 }} onClick={handleSaveAndSnapshot} disabled={saving}>
             {saving ? '저장 중...' : '저장 + 계좌별평가 등록'}
           </button>
         </div>
       ) : (
-        <div style={styles.card}>
+        <div className="card" style={{ margin: 0 }}>
           <h3 style={styles.stepLabel}>{current.label}</h3>
 
           {current.broker !== 'mirae' && (
-            <div style={styles.accountBadge}>
+            <div className="info-badge" style={{ marginBottom: 16 }}>
               {autoAccount
                 ? <span>계좌: <strong>{autoAccount.name}</strong> ({autoAccount.accountId})</span>
-                : <span style={{ color: '#f87171' }}>⚠️ 계좌 관리에서 {current.broker === 'kiwoom_kr' ? '키움 국내' : '키움 해외'} 계좌를 먼저 등록하세요</span>
+                : <span className="neg">⚠️ 계좌 관리에서 {current.broker === 'kiwoom_kr' ? '키움 국내' : '키움 해외'} 계좌를 먼저 등록하세요</span>
               }
             </div>
           )}
@@ -441,16 +484,16 @@ export default function HoldingsInputTab() {
                 <div style={styles.apiLoading}>⏳ API 조회 중...</div>
               )}
               {error && (
-                <div style={styles.errorBox}>
-                  <p style={styles.error}>{error}</p>
-                  <button style={styles.apiBtn} onClick={handleKiwoomApiFetch}>다시 시도</button>
+                <div style={{ marginTop: 10 }}>
+                  <p className="text-error" style={{ marginBottom: 8 }}>{error}</p>
+                  <button className="btn btn-info" style={{ marginRight: 10 }} onClick={handleKiwoomApiFetch}>다시 시도</button>
                 </div>
               )}
               {!apiFetching && !error && parsed && (
                 <div style={styles.apiResultHeader}>
                   <span style={styles.apiResultLabel}>API 조회 완료 — {parsed.length}건</span>
-                  <button style={styles.reloadBtn} onClick={handleKiwoomApiFetch}>↺ 새로고침</button>
-                  <button style={styles.reloadBtn} onClick={() => setShowRaw(v => !v)}>
+                  <button className="btn btn-outline btn-sm" onClick={handleKiwoomApiFetch}>↺ 새로고침</button>
+                  <button className="btn btn-outline btn-sm" onClick={() => setShowRaw(v => !v)}>
                     {showRaw ? '▲ raw 숨기기' : '▼ raw 보기'}
                   </button>
                 </div>
@@ -466,12 +509,12 @@ export default function HoldingsInputTab() {
           {/* 키움 해외 예수금 / 미래에셋 — 붙여넣기 */}
           {!isApiStep && !awaitingCodes && (
             <div style={styles.row}>
-              <label style={styles.label}>
+              <label className="field-label">
                 HTS 복사 텍스트 붙여넣기
                 <span style={styles.hint}> — Ctrl+V 시 자동 파싱</span>
               </label>
               <textarea
-                style={styles.textarea}
+                className="textarea"
                 value={text}
                 onChange={e => { setText(e.target.value); setParsed(null); setError('') }}
                 onPaste={handlePaste}
@@ -479,8 +522,8 @@ export default function HoldingsInputTab() {
                 rows={8}
               />
               {error && (
-                <div style={styles.errorBox}>
-                  <p style={styles.error}>{error}</p>
+                <div style={{ marginTop: 10 }}>
+                  <p className="text-error" style={{ marginBottom: 8 }}>{error}</p>
                   {text.trim() && (
                     <button style={styles.parseBtn} onClick={handleManualParse}>수동으로 파싱</button>
                   )}
@@ -499,18 +542,18 @@ export default function HoldingsInputTab() {
 
           {/* 일반 파싱 결과 미리보기 */}
           {parsed && !awaitingCodes && (
-            <div style={styles.preview}>
-              <p style={styles.previewTitle}>파싱 결과 — {parsed.length}건</p>
-              <div style={styles.tableWrap}>
-                <table style={styles.table}>
+            <div style={{ marginTop: 16 }}>
+              <p className="section-label">파싱 결과 — {parsed.length}건</p>
+              <div className="table-wrap">
+                <table className="data-table">
                   <thead>
-                    <tr>{Object.keys(parsed[0]).map(k => <th key={k} style={styles.th}>{k}</th>)}</tr>
+                    <tr>{Object.keys(parsed[0]).map(k => <th key={k}>{k}</th>)}</tr>
                   </thead>
                   <tbody>
                     {parsed.map((row, i) => (
                       <tr key={i}>
                         {Object.values(row).map((v, j) => (
-                          <td key={j} style={styles.td}>{typeof v === 'number' ? v.toLocaleString() : String(v)}</td>
+                          <td key={j}>{typeof v === 'number' ? v.toLocaleString() : String(v)}</td>
                         ))}
                       </tr>
                     ))}
@@ -527,41 +570,20 @@ export default function HoldingsInputTab() {
 
 const styles = {
   dateRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 },
-  dateInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', color: '#f1f5f9', fontSize: 14 },
   steps: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 },
   stepItem: { background: '#1e293b', color: '#64748b', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer', border: '1px solid transparent' },
   stepActive: { background: '#1d4ed8', color: '#fff', border: '1px solid #3b82f6' },
   stepDone: { background: '#14532d', color: '#86efac', border: '1px solid #22c55e' },
-  card: { background: '#1e293b', borderRadius: 12, padding: '24px' },
   stepLabel: { color: '#f1f5f9', fontSize: 16, fontWeight: 600, marginBottom: 20 },
   row: { marginBottom: 16 },
-  label: { display: 'block', color: '#94a3b8', fontSize: 13, marginBottom: 6 },
   hint: { color: '#475569', fontSize: 12 },
-  accountBadge: { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 14px', color: '#94a3b8', fontSize: 14, marginBottom: 16 },
-  textarea: { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '12px', color: '#f1f5f9', fontSize: 13, fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box' },
-  errorBox: { marginTop: 10 },
-  error: { color: '#f87171', fontSize: 13, marginBottom: 8 },
   parseBtn: { background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontWeight: 600, fontSize: 13 },
-  preview: { marginTop: 16 },
-  previewTitle: { color: '#94a3b8', fontSize: 13, marginBottom: 10 },
-  tableWrap: { overflowX: 'auto' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
-  th: { background: '#0f172a', color: '#64748b', padding: '8px 10px', textAlign: 'left', whiteSpace: 'nowrap' },
-  td: { color: '#e2e8f0', padding: '7px 10px', borderBottom: '1px solid #0f172a', whiteSpace: 'nowrap' },
   allDoneCard: { background: '#0f2d1a', border: '1px solid #22c55e', borderRadius: 12, padding: '40px', textAlign: 'center' },
   allDoneTitle: { color: '#4ade80', fontSize: 20, fontWeight: 700, marginBottom: 10 },
   allDoneDesc: { color: '#94a3b8', fontSize: 14, marginBottom: 28 },
-  snapshotBtn: { background: '#22c55e', color: '#fff', border: 'none', borderRadius: 10, padding: '14px 40px', fontSize: 16, fontWeight: 700, cursor: 'pointer' },
   rawBox: { marginTop: 16, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '12px 14px' },
-  rawTitle: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
   rawPre: { color: '#86efac', fontSize: 11, fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, maxHeight: 300, overflowY: 'auto' },
-  apiBox: { marginBottom: 20 },
   apiLoading: { color: '#94a3b8', fontSize: 14, padding: '20px 0' },
   apiResultHeader: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 },
   apiResultLabel: { color: '#4ade80', fontSize: 14, fontWeight: 600 },
-  reloadBtn: { background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', fontSize: 12, padding: '4px 10px', cursor: 'pointer' },
-  apiBtn: { background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 22px', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginRight: 10 },
-  apiHint: { color: '#475569', fontSize: 12 },
-  divider: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, marginBottom: 4 },
-  dividerText: { color: '#334155', fontSize: 12, background: '#1e293b', padding: '0 8px', whiteSpace: 'nowrap' },
 }

@@ -252,18 +252,3 @@ export function transformUsCash(raw, accountId) {
   return [{ accountId, amount: num(raw.d2_won_conv_alow_ch) }]
 }
 
-export function transformKrCashFlows(rows, accountId) {
-  return rows
-    .filter(it => str(it.trde_no))
-    .map(it => ({
-      accountId,
-      broker: 'kiwoom_kr',
-      date: toIso(it.trde_dt),
-      tradeNo: `${str(it.trde_dt)}_${str(it.trde_no)}`,
-      ioType: str(it.io_tp_nm),
-      amount: num(it.trde_amt),
-      memo: str(it.rmrk_nm),
-      balance: num(it.entra_remn),
-      time: str(it.proc_tm),
-    }))
-}

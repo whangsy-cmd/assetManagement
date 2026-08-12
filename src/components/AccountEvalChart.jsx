@@ -1,5 +1,6 @@
 // 계좌별평가(accountEval) 기반 총자산 변동 추이 스택 영역 차트 (Dashboard/계좌평가이전 공용)
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import '../common.css'
 
 const CHART_COLORS = ['#e2703a', '#0ea5b7', '#e0b94f', '#2f6fed', '#8b6cf0', '#38b28a', '#c65a8a', '#4fa8dc', '#d97b3f', '#7c8ba1']
 
@@ -64,13 +65,13 @@ export default function AccountEvalChart({ rows, startDate, categoryOf, title = 
   if (!data.length) return null
 
   return (
-    <div style={styles.card}>
-      <div style={styles.header}>
-        <h3 style={styles.title}>{title}</h3>
-        <div style={styles.legend}>
+    <div className="card" style={{ padding: 16 }}>
+      <div className="section-header">
+        <h3 className="section-title">{title}</h3>
+        <div className="legend">
           {groups.map((g, i) => (
-            <span key={g} style={styles.legendItem}>
-              <span style={{ ...styles.legendDot, background: CHART_COLORS[i % CHART_COLORS.length] }} />{g}
+            <span key={g} className="legend-item">
+              <span className="legend-dot" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />{g}
             </span>
           ))}
         </div>
@@ -101,11 +102,3 @@ export default function AccountEvalChart({ rows, startDate, categoryOf, title = 
   )
 }
 
-const styles = {
-  card: { background: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 16 },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' },
-  title: { color: '#f1f5f9', fontSize: 15, fontWeight: 700, margin: 0 },
-  legend: { display: 'flex', gap: 12, flexWrap: 'wrap' },
-  legendItem: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#94a3b8' },
-  legendDot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
-}

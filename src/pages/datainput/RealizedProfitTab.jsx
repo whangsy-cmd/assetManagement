@@ -7,7 +7,8 @@ import {
   parseRealizedProfitKrOptionAccount, parseRealizedProfitKrOptionAccount2,
   parseRealizedProfitMirae,
 } from '../../utils/parsers'
-import { getSectors, saveRealizedProfits } from '../../utils/firestore'
+import { getSectors, saveRealizedProfits, deleteDocument } from '../../utils/firestore'
+import '../../common.css'
 
 // 동일 일자+종목코드 여러 건은 실현손익/수수료를 합산해서 한 건으로 등록
 function aggregate(rows) {
@@ -76,64 +77,64 @@ function RealizedProfitCard({ title, fixedAccount, missingMsg, selectableAccount
   }
 
   return (
-    <div style={styles.card}>
-      <div style={styles.cardHeadRow}>
-        <h3 style={styles.cardTitle}>{title}</h3>
+    <div className="card" style={{ margin: 0 }}>
+      <div className="section-header">
+        <h3 className="section-title">{title}</h3>
         {selectableAccounts ? (
-          <select style={styles.select} value={selectedId} onChange={e => setSelectedId(e.target.value)}>
+          <select className="select input-sm" value={selectedId} onChange={e => setSelectedId(e.target.value)}>
             {selectableAccounts.length === 0 && <option value="">등록된 계좌 없음</option>}
             {selectableAccounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} ({a.accountId})</option>)}
           </select>
         ) : account ? (
-          <span style={styles.accountInline}>{account.name} ({account.accountId})</span>
+          <span className="text-muted">{account.name} ({account.accountId})</span>
         ) : (
-          <span style={{ color: '#f87171', fontSize: 13 }}>⚠️ {missingMsg}</span>
+          <span className="neg" style={{ fontSize: 13 }}>⚠️ {missingMsg}</span>
         )}
       </div>
 
       {accountId && (
         <>
           <textarea
-            style={styles.textarea}
+            className="textarea"
             value={text}
             onChange={e => { setText(e.target.value); setRows(null); setError(''); setSavedMsg('') }}
             onPaste={handlePaste}
             placeholder={placeholder}
             rows={4}
           />
-          {error && <p style={styles.error}>{error}</p>}
-          {savedMsg && <p style={styles.saved}>{savedMsg}</p>}
+          {error && <p className="text-error" style={{ marginTop: 8 }}>{error}</p>}
+          {savedMsg && <p className="text-success" style={{ marginTop: 8 }}>{savedMsg}</p>}
         </>
       )}
 
       {rows && (
-        <div style={styles.preview}>
-          <p style={styles.previewTitle}>파싱 결과 (동일 일자·종목 합산) — {rows.length}건</p>
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
+        <div style={{ marginTop: 16 }}>
+          <p className="section-label">파싱 결과 (동일 일자·종목 합산) — {rows.length}건</p>
+          <div className="table-wrap">
+            <table className="data-table">
               <thead>
                 <tr>
-                  <th style={styles.th}>일자</th>
-                  <th style={styles.th}>종목코드</th>
-                  <th style={styles.th}>종목명</th>
-                  <th style={{ ...styles.th, textAlign: 'right' }}>실현손익</th>
-                  <th style={{ ...styles.th, textAlign: 'right' }}>수수료</th>
+                  <th>일자</th>
+                  <th>종목코드</th>
+                  <th>종목명</th>
+                  <th style={{ textAlign: 'right' }}>실현손익</th>
+                  <th style={{ textAlign: 'right' }}>수수료</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i}>
-                    <td style={styles.td}>{r.date}</td>
-                    <td style={styles.td}>{r.code || '-'}</td>
-                    <td style={styles.td}>{r.name || '-'}</td>
-                    <td style={{ ...styles.td, textAlign: 'right', color: r.realizedProfit >= 0 ? '#4ade80' : '#f87171' }}>{r.realizedProfit.toLocaleString()}</td>
-                    <td style={{ ...styles.td, textAlign: 'right' }}>{r.fee.toLocaleString()}</td>
+                    <td>{r.date}</td>
+                    <td>{r.code || '-'}</td>
+                    <td>{r.name || '-'}</td>
+                    <td className={r.realizedProfit >= 0 ? 'pos' : 'neg'} style={{ textAlign: 'right' }}>{r.realizedProfit.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>{r.fee.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
+          <button className="btn btn-primary" style={{ marginTop: 14 }} onClick={handleSave} disabled={saving}>
             {saving ? '등록 중...' : '등록'}
           </button>
         </div>
@@ -158,14 +159,18 @@ function ManualEntryCard({ accounts }) {
   const handleSave = async () => {
     setError('')
     setSavedMsg('')
-    if (!accountId || !date || !realizedProfit) { setError('계좌/일자/실현손익은 필수입니다.'); return }
+    if (!accountId || !date || realizedProfit === '') { setError('계좌/일자/실현손익은 필수입니다.'); return }
     setSaving(true)
     try {
-      await saveRealizedProfits(user.uid, [{
-        date, accountId, code: '', name: '',
-        realizedProfit: Number(realizedProfit) || 0, fee: 0,
-      }])
-      setSavedMsg('✅ 등록 완료')
+      const val = Number(realizedProfit) || 0
+      if (val === 0) {
+        // 0 입력 시 등록 대신 해당 일자/계좌의 기존 실현손익 행 삭제
+        await deleteDocument(user.uid, 'realizedProfits', `${date}_${accountId}`)
+        setSavedMsg('✅ 삭제 완료')
+      } else {
+        await saveRealizedProfits(user.uid, [{ date, accountId, code: '', name: '', realizedProfit: val, fee: 0 }])
+        setSavedMsg('✅ 등록 완료')
+      }
       setDate(''); setRealizedProfit('')
     } catch (e) {
       setError('저장 오류: ' + e.message)
@@ -174,22 +179,22 @@ function ManualEntryCard({ accounts }) {
   }
 
   return (
-    <div style={styles.card}>
-      <div style={styles.cardHeadRow}>
-        <h3 style={styles.cardTitle}>직접 입력 (정해진 포맷 없는 계좌 1회성 등록)</h3>
+    <div className="card" style={{ margin: 0 }}>
+      <div className="section-header">
+        <h3 className="section-title">직접 입력 (정해진 포맷 없는 계좌 1회성 등록)</h3>
       </div>
       <div style={styles.manualRow}>
-        <select style={styles.select} value={accountId} onChange={e => setAccountId(e.target.value)}>
+        <select className="select input-sm" value={accountId} onChange={e => setAccountId(e.target.value)}>
           {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} ({a.accountId})</option>)}
         </select>
-        <input style={styles.manualInput} type="date" value={date} onChange={e => setDate(e.target.value)} />
-        <input style={styles.manualInput} placeholder="실현손익" type="number" value={realizedProfit} onChange={e => setRealizedProfit(e.target.value)} />
-        <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
+        <input className="input input-sm" style={{ width: 140 }} type="date" value={date} onChange={e => setDate(e.target.value)} />
+        <input className="input input-sm" style={{ width: 140 }} placeholder="실현손익" type="number" value={realizedProfit} onChange={e => setRealizedProfit(e.target.value)} />
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
           {saving ? '등록 중...' : '등록'}
         </button>
       </div>
-      {error && <p style={styles.error}>{error}</p>}
-      {savedMsg && <p style={styles.saved}>{savedMsg}</p>}
+      {error && <p className="text-error" style={{ marginTop: 8 }}>{error}</p>}
+      {savedMsg && <p className="text-success" style={{ marginTop: 8 }}>{savedMsg}</p>}
     </div>
   )
 }
@@ -251,21 +256,5 @@ export default function RealizedProfitTab() {
 }
 
 const styles = {
-  card: { background: '#1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 16 },
-  cardHeadRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' },
-  cardTitle: { color: '#f1f5f9', fontSize: 16, fontWeight: 600, margin: 0 },
-  accountInline: { color: '#94a3b8', fontSize: 13 },
-  select: { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '6px 10px', color: '#f1f5f9', fontSize: 13 },
   manualRow: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
-  manualInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', color: '#f1f5f9', fontSize: 13, width: 140 },
-  textarea: { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '12px', color: '#f1f5f9', fontSize: 13, fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box' },
-  error: { color: '#f87171', fontSize: 13, marginTop: 8 },
-  saved: { color: '#4ade80', fontSize: 13, marginTop: 8 },
-  preview: { marginTop: 16 },
-  previewTitle: { color: '#94a3b8', fontSize: 13, marginBottom: 10 },
-  tableWrap: { overflowX: 'auto' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
-  th: { background: '#0f172a', color: '#64748b', padding: '8px 10px', textAlign: 'left', whiteSpace: 'nowrap' },
-  td: { color: '#e2e8f0', padding: '7px 10px', borderBottom: '1px solid #0f172a', whiteSpace: 'nowrap' },
-  saveBtn: { background: '#22c55e', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', cursor: 'pointer', fontWeight: 600, fontSize: 14, marginTop: 14 },
 }

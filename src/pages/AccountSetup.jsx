@@ -18,7 +18,8 @@ export const CATEGORY_LABEL = { domestic: '국내', overseas: '해외', pension:
 
 export default function AccountSetup() {
   const { user } = useAuth()
-  const { accounts, loading, error, saveAccount, deleteAccount } = useAccounts()
+  const { accounts, loading, error, saveAccount, deleteAccount, reorderAccounts } = useAccounts()
+  const [dragIndex, setDragIndex] = useState(null)
   const [form, setForm] = useState({ accountId: '', broker: 'kiwoom_kr', category: 'domestic', name: '', type: 'stock' })
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -123,6 +124,15 @@ export default function AccountSetup() {
     setSaving(false)
   }
 
+  const handleDrop = (dropIndex) => {
+    if (dragIndex === null || dragIndex === dropIndex) { setDragIndex(null); return }
+    const reordered = [...accounts]
+    const [moved] = reordered.splice(dragIndex, 1)
+    reordered.splice(dropIndex, 0, moved)
+    setDragIndex(null)
+    reorderAccounts(reordered)
+  }
+
   const handleDeleteAccount = async (accountId) => {
     if (!confirm(`계좌 ${accountId}를 삭제할까요?`)) return
     setActionError('')
@@ -133,14 +143,14 @@ export default function AccountSetup() {
     }
   }
 
-  if (loading) return <div style={styles.loading}>로딩 중...</div>
+  if (loading) return <div className="loading">로딩 중...</div>
 
   if (error) return (
     <div>
       <div style={styles.errorBox}>
         <strong>Firestore 연결 오류</strong>
         <p style={{ margin: '8px 0 0', fontSize: 13 }}>{error}</p>
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: '#94a3b8' }}>
+        <p className="text-muted" style={{ margin: '8px 0 0', fontSize: 12 }}>
           Firebase Console → Firestore → 규칙 탭에서 보안 규칙을 확인하세요.
         </p>
       </div>
@@ -150,34 +160,43 @@ export default function AccountSetup() {
   return (
     <div>
       {accounts.length === 0 && (
-        <div style={styles.initBox}>
-          <p style={styles.initText}>미래에셋 기본 계좌 4개를 한 번에 등록합니다.</p>
-          <button style={styles.initBtn} onClick={handleInitAccounts} disabled={saving}>
+        <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <p className="text-muted" style={{ margin: 0, flex: 1 }}>미래에셋 기본 계좌 4개를 한 번에 등록합니다.</p>
+          <button className="btn btn-accent" onClick={handleInitAccounts} disabled={saving}>
             {saving ? '등록 중...' : '미래에셋 기본 계좌 초기 등록'}
           </button>
         </div>
       )}
 
-      {actionError && <p style={styles.errorText}>{actionError}</p>}
+      {actionError && <p className="text-error" style={{ marginBottom: 12 }}>{actionError}</p>}
 
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
+      <div className="table-wrap" style={{ marginBottom: 32 }}>
+        <table className="data-table">
           <thead>
             <tr>
-              <th style={styles.th}>계좌번호</th>
-              <th style={styles.th}>증권사</th>
-              <th style={styles.th}>유형</th>
-              <th style={styles.th}>이름</th>
-              <th style={styles.th}>작업</th>
+              <th></th>
+              <th>계좌번호</th>
+              <th>증권사</th>
+              <th>유형</th>
+              <th>이름</th>
+              <th>작업</th>
             </tr>
           </thead>
           <tbody>
-            {accounts.map(acc => (
-              <tr key={acc.id} style={styles.tr}>
-                <td style={styles.td}><code style={styles.code}>{acc.accountId}</code></td>
-                <td style={styles.td}>
+            {accounts.map((acc, i) => (
+              <tr
+                key={acc.id}
+                draggable
+                onDragStart={() => setDragIndex(i)}
+                onDragOver={e => e.preventDefault()}
+                onDrop={() => handleDrop(i)}
+                style={{ opacity: dragIndex === i ? 0.4 : 1 }}
+              >
+                <td style={{ cursor: 'grab', color: '#64748b' }}>⠿</td>
+                <td><code className="code-chip">{acc.accountId}</code></td>
+                <td>
                   {editingId === acc.id ? (
-                    <select style={styles.inlineSelect} value={editBroker} onChange={e => setEditBroker(e.target.value)}>
+                    <select className="select input-sm" style={{ borderColor: '#3b82f6' }} value={editBroker} onChange={e => setEditBroker(e.target.value)}>
                       <option value="mirae">미래에셋</option>
                       <option value="kiwoom_kr">키움 국내</option>
                       <option value="kiwoom_us">키움 해외</option>
@@ -187,9 +206,9 @@ export default function AccountSetup() {
                     BROKER_LABEL[acc.broker] || acc.broker
                   )}
                 </td>
-                <td style={styles.td}>
+                <td>
                   {editingId === acc.id ? (
-                    <select style={styles.inlineSelect} value={editCategory} onChange={e => setEditCategory(e.target.value)}>
+                    <select className="select input-sm" style={{ borderColor: '#3b82f6' }} value={editCategory} onChange={e => setEditCategory(e.target.value)}>
                       <option value="domestic">국내</option>
                       <option value="overseas">해외</option>
                       <option value="pension">연금</option>
@@ -199,10 +218,11 @@ export default function AccountSetup() {
                     CATEGORY_LABEL[acc.category] || acc.category
                   )}
                 </td>
-                <td style={styles.td}>
+                <td>
                   {editingId === acc.id ? (
                     <input
-                      style={styles.inlineInput}
+                      className="input input-sm"
+                      style={{ borderColor: '#3b82f6', width: 160 }}
                       value={editName}
                       onChange={e => setEditName(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleEditSave(acc)}
@@ -212,17 +232,17 @@ export default function AccountSetup() {
                     acc.name
                   )}
                 </td>
-                <td style={styles.td}>
+                <td>
                   <div style={styles.actions}>
                     {editingId === acc.id ? (
                       <>
-                        <button style={styles.confirmBtn} onClick={() => handleEditSave(acc)} disabled={saving}>저장</button>
-                        <button style={styles.cancelBtn} onClick={() => setEditingId(null)}>취소</button>
+                        <button className="btn btn-primary btn-sm" onClick={() => handleEditSave(acc)} disabled={saving}>저장</button>
+                        <button className="btn btn-outline btn-sm" onClick={() => setEditingId(null)}>취소</button>
                       </>
                     ) : (
                       <>
-                        <button style={styles.editBtn} onClick={() => { setEditingId(acc.id); setEditName(acc.name); setEditCategory(acc.category); setEditBroker(acc.broker) }}>수정</button>
-                        <button style={styles.delBtn} onClick={() => handleDeleteAccount(acc.id)}>삭제</button>
+                        <button className="btn btn-outline-blue btn-sm" onClick={() => { setEditingId(acc.id); setEditName(acc.name); setEditCategory(acc.category); setEditBroker(acc.broker) }}>수정</button>
+                        <button className="btn btn-outline-red btn-sm" onClick={() => handleDeleteAccount(acc.id)}>삭제</button>
                       </>
                     )}
                   </div>
@@ -233,78 +253,80 @@ export default function AccountSetup() {
         </table>
       </div>
 
-      <div style={styles.formBox}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={styles.formTitle}>계좌 추가</h3>
         <form onSubmit={handleAdd} style={styles.form}>
           <input
-            style={styles.input}
+            className="input"
+            style={{ flex: 2, minWidth: 140 }}
             placeholder="계좌번호"
             value={form.accountId}
             onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
           />
-          <select style={styles.select} value={form.broker} onChange={e => setForm(f => ({ ...f, broker: e.target.value }))}>
+          <select className="select" style={{ flex: 1, minWidth: 110 }} value={form.broker} onChange={e => setForm(f => ({ ...f, broker: e.target.value }))}>
             <option value="mirae">미래에셋</option>
             <option value="kiwoom_kr">키움 국내</option>
             <option value="kiwoom_us">키움 해외</option>
             <option value="ibk">기업은행</option>
           </select>
-          <select style={styles.select} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+          <select className="select" style={{ flex: 1, minWidth: 110 }} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
             <option value="domestic">국내</option>
             <option value="overseas">해외</option>
             <option value="pension">연금</option>
             <option value="futures">선물옵션</option>
           </select>
           <input
-            style={styles.input}
+            className="input"
+            style={{ flex: 2, minWidth: 140 }}
             placeholder="표시 이름"
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
           />
-          <button style={styles.addBtn} type="submit" disabled={saving}>
+          <button className="btn btn-primary" type="submit" disabled={saving}>
             {saving ? '저장 중...' : '추가'}
           </button>
         </form>
       </div>
 
       {/* 대출금 관리 */}
-      <div style={styles.loanBox}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={styles.formTitle}>대출금 관리</h3>
-        <p style={styles.loanDesc}>현재 대출 잔액을 등록하면 스냅샷 생성 시 순자산에 반영됩니다.</p>
+        <p className="text-muted" style={{ marginBottom: 16 }}>현재 대출 잔액을 등록하면 스냅샷 생성 시 순자산에 반영됩니다.</p>
 
         {loans.length > 0 && (
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
+          <div className="table-wrap">
+            <table className="data-table">
               <thead>
                 <tr>
-                  <th style={styles.th}>대출명</th>
-                  <th style={styles.th}>잔액</th>
-                  <th style={styles.th}>작업</th>
+                  <th>대출명</th>
+                  <th>잔액</th>
+                  <th>작업</th>
                 </tr>
               </thead>
               <tbody>
                 {loans.map(loan => (
-                  <tr key={loan.id} style={styles.tr}>
-                    <td style={styles.td}>
+                  <tr key={loan.id}>
+                    <td>
                       {editingLoan?.id === loan.id
-                        ? <input style={styles.inlineInput} value={editingLoan.name} onChange={e => setEditingLoan(l => ({ ...l, name: e.target.value }))} autoFocus />
+                        ? <input className="input input-sm" style={{ borderColor: '#3b82f6', width: 160 }} value={editingLoan.name} onChange={e => setEditingLoan(l => ({ ...l, name: e.target.value }))} autoFocus />
                         : loan.name}
                     </td>
-                    <td style={{ ...styles.td, textAlign: 'right' }}>
+                    <td style={{ textAlign: 'right' }}>
                       {editingLoan?.id === loan.id
-                        ? <input style={{ ...styles.inlineInput, width: 130, textAlign: 'right' }} value={editingLoan.amount} onChange={e => setEditingLoan(l => ({ ...l, amount: e.target.value }))} />
-                        : <span style={{ color: '#f87171' }}>-{loan.amount?.toLocaleString()}원</span>}
+                        ? <input className="input input-sm" style={{ borderColor: '#3b82f6', width: 130, textAlign: 'right' }} value={editingLoan.amount} onChange={e => setEditingLoan(l => ({ ...l, amount: e.target.value }))} />
+                        : <span className="neg">-{loan.amount?.toLocaleString()}원</span>}
                     </td>
-                    <td style={styles.td}>
+                    <td>
                       <div style={styles.actions}>
                         {editingLoan?.id === loan.id ? (
                           <>
-                            <button style={styles.confirmBtn} onClick={() => handleSaveLoan(loan)} disabled={loanSaving}>저장</button>
-                            <button style={styles.cancelBtn} onClick={() => setEditingLoan(null)}>취소</button>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleSaveLoan(loan)} disabled={loanSaving}>저장</button>
+                            <button className="btn btn-outline btn-sm" onClick={() => setEditingLoan(null)}>취소</button>
                           </>
                         ) : (
                           <>
-                            <button style={styles.editBtn} onClick={() => setEditingLoan({ id: loan.id, name: loan.name, amount: loan.amount })}>수정</button>
-                            <button style={styles.delBtn} onClick={() => handleDeleteLoan(loan.id)}>삭제</button>
+                            <button className="btn btn-outline-blue btn-sm" onClick={() => setEditingLoan({ id: loan.id, name: loan.name, amount: loan.amount })}>수정</button>
+                            <button className="btn btn-outline-red btn-sm" onClick={() => handleDeleteLoan(loan.id)}>삭제</button>
                           </>
                         )}
                       </div>
@@ -312,11 +334,11 @@ export default function AccountSetup() {
                   </tr>
                 ))}
                 <tr style={{ borderTop: '2px solid #334155' }}>
-                  <td style={{ ...styles.td, fontWeight: 700, color: '#94a3b8' }}>합계</td>
-                  <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
+                  <td style={{ fontWeight: 700, color: '#94a3b8' }}>합계</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }} className="neg">
                     -{loans.reduce((s, l) => s + (l.amount || 0), 0).toLocaleString()}원
                   </td>
-                  <td style={styles.td} />
+                  <td />
                 </tr>
               </tbody>
             </table>
@@ -325,40 +347,42 @@ export default function AccountSetup() {
 
         <form onSubmit={handleAddLoan} style={{ ...styles.form, marginTop: 12 }}>
           <input
-            style={styles.input}
+            className="input"
+            style={{ flex: 2, minWidth: 140 }}
             placeholder="대출명 (예: 신용대출)"
             value={loanForm.name}
             onChange={e => setLoanForm(f => ({ ...f, name: e.target.value }))}
           />
           <input
-            style={styles.input}
+            className="input"
+            style={{ flex: 2, minWidth: 140 }}
             placeholder="잔액 (원)"
             value={loanForm.amount}
             onChange={e => setLoanForm(f => ({ ...f, amount: e.target.value }))}
             type="number"
             min="0"
           />
-          <button style={styles.addBtn} type="submit" disabled={loanSaving}>
+          <button className="btn btn-primary" type="submit" disabled={loanSaving}>
             {loanSaving ? '저장 중...' : '추가'}
           </button>
         </form>
       </div>
 
       {/* 키움 API 키 */}
-      <div style={styles.loanBox}>
+      <div className="card">
         <h3 style={styles.formTitle}>키움 API 키</h3>
-        <p style={styles.loanDesc}>
-          국내: {kiwoomStatus.kr ? <span style={{ color: '#4ade80' }}>등록됨</span> : <span style={{ color: '#f87171' }}>미등록</span>}
+        <p className="text-muted" style={{ marginBottom: 16 }}>
+          국내: {kiwoomStatus.kr ? <span className="pos">등록됨</span> : <span className="neg">미등록</span>}
           {'  ·  '}
-          해외: {kiwoomStatus.us ? <span style={{ color: '#4ade80' }}>등록됨</span> : <span style={{ color: '#f87171' }}>미등록</span>}
+          해외: {kiwoomStatus.us ? <span className="pos">등록됨</span> : <span className="neg">미등록</span>}
           <br />저장 후에는 값이 표시되지 않습니다. 변경하려면 새 값을 입력 후 저장하세요.
         </p>
         <form onSubmit={handleSaveKiwoom} style={styles.form}>
-          <input style={styles.input} placeholder="국내 appkey" type="password" value={kiwoomForm.kr_appkey} onChange={e => setKiwoomForm(f => ({ ...f, kr_appkey: e.target.value }))} />
-          <input style={styles.input} placeholder="국내 secretkey" type="password" value={kiwoomForm.kr_secretkey} onChange={e => setKiwoomForm(f => ({ ...f, kr_secretkey: e.target.value }))} />
-          <input style={styles.input} placeholder="해외 appkey" type="password" value={kiwoomForm.us_appkey} onChange={e => setKiwoomForm(f => ({ ...f, us_appkey: e.target.value }))} />
-          <input style={styles.input} placeholder="해외 secretkey" type="password" value={kiwoomForm.us_secretkey} onChange={e => setKiwoomForm(f => ({ ...f, us_secretkey: e.target.value }))} />
-          <button style={styles.addBtn} type="submit" disabled={kiwoomSaving}>
+          <input className="input" style={{ flex: 2, minWidth: 140 }} placeholder="국내 appkey" type="password" value={kiwoomForm.kr_appkey} onChange={e => setKiwoomForm(f => ({ ...f, kr_appkey: e.target.value }))} />
+          <input className="input" style={{ flex: 2, minWidth: 140 }} placeholder="국내 secretkey" type="password" value={kiwoomForm.kr_secretkey} onChange={e => setKiwoomForm(f => ({ ...f, kr_secretkey: e.target.value }))} />
+          <input className="input" style={{ flex: 2, minWidth: 140 }} placeholder="해외 appkey" type="password" value={kiwoomForm.us_appkey} onChange={e => setKiwoomForm(f => ({ ...f, us_appkey: e.target.value }))} />
+          <input className="input" style={{ flex: 2, minWidth: 140 }} placeholder="해외 secretkey" type="password" value={kiwoomForm.us_secretkey} onChange={e => setKiwoomForm(f => ({ ...f, us_secretkey: e.target.value }))} />
+          <button className="btn btn-primary" type="submit" disabled={kiwoomSaving}>
             {kiwoomSaving ? '저장 중...' : '저장'}
           </button>
         </form>
@@ -369,31 +393,8 @@ export default function AccountSetup() {
 }
 
 const styles = {
-  loading: { color: '#94a3b8', padding: 40, textAlign: 'center' },
-  initBox: { background: '#1e293b', borderRadius: 10, padding: '20px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
-  initText: { color: '#94a3b8', margin: 0, flex: 1 },
-  initBtn: { background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' },
   errorBox: { background: '#450a0a', border: '1px solid #ef4444', borderRadius: 10, padding: '16px 20px', color: '#fca5a5' },
-  errorText: { color: '#f87171', fontSize: 13, marginBottom: 12 },
-  tableWrap: { overflowX: 'auto', marginBottom: 32 },
-  table: { width: '100%', borderCollapse: 'collapse' },
-  th: { background: '#1e293b', color: '#94a3b8', padding: '10px 14px', textAlign: 'left', fontSize: 13, fontWeight: 600 },
-  tr: { borderBottom: '1px solid #1e293b' },
-  td: { color: '#e2e8f0', padding: '10px 14px', fontSize: 14 },
-  code: { background: '#0f172a', padding: '2px 6px', borderRadius: 4, fontSize: 12, fontFamily: 'monospace' },
   actions: { display: 'flex', gap: 6 },
-  editBtn: { background: 'transparent', color: '#60a5fa', border: '1px solid #60a5fa', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 },
-  delBtn: { background: 'transparent', color: '#ef4444', border: '1px solid #ef4444', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 },
-  confirmBtn: { background: '#22c55e', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 },
-  cancelBtn: { background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '8px 18px', cursor: 'pointer', fontSize: 14 },
-  inlineInput: { background: '#0f172a', border: '1px solid #3b82f6', borderRadius: 6, padding: '4px 8px', color: '#f1f5f9', fontSize: 14, width: 160 },
-  inlineSelect: { background: '#0f172a', border: '1px solid #3b82f6', borderRadius: 6, padding: '4px 8px', color: '#f1f5f9', fontSize: 14 },
-  formBox: { background: '#1e293b', borderRadius: 10, padding: '20px 24px', marginBottom: 24 },
   formTitle: { color: '#f1f5f9', fontSize: 16, fontWeight: 600, marginBottom: 16 },
   form: { display: 'flex', gap: 10, flexWrap: 'wrap' },
-  input: { flex: 2, minWidth: 140, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: 14 },
-  select: { flex: 1, minWidth: 110, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px', color: '#f1f5f9', fontSize: 14 },
-  addBtn: { background: '#22c55e', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontWeight: 600 },
-  loanBox: { background: '#1e293b', borderRadius: 10, padding: '20px 24px', marginTop: 24 },
-  loanDesc: { color: '#64748b', fontSize: 13, marginBottom: 16 },
 }

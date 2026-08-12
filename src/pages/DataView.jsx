@@ -6,15 +6,14 @@ import { getAllDocsRaw } from '../utils/firestore'
 import HoldingsTab from './dataview/HoldingsTab'
 import AccountEvalTab from './dataview/AccountEvalTab'
 import SnapshotsTab from './dataview/SnapshotsTab'
-import CashFlowsTab from './dataview/CashFlowsTab'
 import StockPeriodTab from './dataview/StockPeriodTab'
+import StockProfitTab from './dataview/StockProfitTab'
 import RealizedProfitTab from './dataview/RealizedProfitTab'
 import TransactionsTab from './dataview/TransactionsTab'
-import { styles } from './dataview/shared'
 import '../common.css'
 
 // 탭 목록과 아래 렌더 스위치(tab === i)의 순서가 반드시 일치해야 함
-const TABS = ['보유종목', '계좌평가 조회', '계좌통합 조회', '입출금내역', '종목별 조회', '실현손익 조회', '거래내역']
+const TABS = ['계좌통합 조회', '계좌평가 조회', '실현손익 조회', '보유종목', '거래내역', '종목별 조회', '종목별 손익']
 
 // 백업 대상 컬렉션. settings(키움 API 키 등 시크릿 포함)는 의도적으로 제외.
 const BACKUP_COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'taxPayments', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance', 'realizedProfits', 'transactions']
@@ -32,6 +31,7 @@ function flattenDoc(obj) {
 export default function DataView() {
   const { user } = useAuth()
   const [tab, setTab] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [backingUp, setBackingUp] = useState(false)
 
   const handleFullBackup = async () => {
@@ -52,31 +52,31 @@ export default function DataView() {
 
   return (
     <div className="page">
-      <div style={styles.headingRow}>
-        <h2 style={styles.heading}>데이터 조회</h2>
-        <button style={styles.backupBtn} onClick={handleFullBackup} disabled={backingUp}>
+      <div className="page-heading-row">
+        <h2 className="page-heading">데이터 조회</h2>
+        <button className="btn btn-outline-blue" style={{ marginLeft: 'auto' }} onClick={handleFullBackup} disabled={backingUp}>
           {backingUp ? '백업 생성 중...' : '전체 백업 다운로드'}
         </button>
       </div>
 
-      <div style={styles.tabs}>
+      <div className="tabs">
         {TABS.map((t, i) => (
           <button
             key={i}
-            style={{ ...styles.tab, ...(i === tab ? styles.tabActive : {}) }}
-            onClick={() => setTab(i)}
+            className={'tab' + (i === tab ? ' active' : '')}
+            onClick={() => { setTab(i); setRefreshKey(k => k + 1) }}
           >{t}</button>
         ))}
       </div>
 
-      <div style={styles.content}>
-        {tab === 0 && <HoldingsTab />}
+      <div className="card" key={`${tab}-${refreshKey}`}>
+        {tab === 0 && <SnapshotsTab />}
         {tab === 1 && <AccountEvalTab />}
-        {tab === 2 && <SnapshotsTab />}
-        {tab === 3 && <CashFlowsTab />}
-        {tab === 4 && <StockPeriodTab />}
-        {tab === 5 && <RealizedProfitTab />}
-        {tab === 6 && <TransactionsTab />}
+        {tab === 2 && <RealizedProfitTab />}
+        {tab === 3 && <HoldingsTab />}
+        {tab === 4 && <TransactionsTab />}
+        {tab === 5 && <StockPeriodTab />}
+        {tab === 6 && <StockProfitTab />}
       </div>
     </div>
   )

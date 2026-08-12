@@ -75,28 +75,28 @@ export default function KiwoomTest() {
 
   return (
     <div className="page">
-      <h2 style={styles.heading}>키움 API 테스트</h2>
-      <p style={styles.desc}>버튼을 눌러 키움 API를 직접 호출하고 원본 응답을 확인합니다. CORS 오류는 브라우저 콘솔에도 표시됩니다.</p>
+      <h2 className="page-heading">키움 API 테스트</h2>
+      <p className="text-muted" style={{ margin: '8px 0 20px' }}>버튼을 눌러 키움 API를 직접 호출하고 원본 응답을 확인합니다. CORS 오류는 브라우저 콘솔에도 표시됩니다.</p>
 
-      <div style={styles.section}>
-        <h4 style={styles.subheading}>계좌 조회</h4>
+      <div className="card">
+        <h4 className="section-label">계좌 조회</h4>
         <div style={styles.btnRow}>
           {SIMPLE_CALLS.map(({ label, kind, path, apiId, body, fn }) => (
-            <button key={label} style={styles.btn} disabled={!!loading} onClick={() => runWithRequest(label, kind, path, apiId, body, fn)}>
+            <button key={label} className="btn btn-outline-blue btn-sm" disabled={!!loading} onClick={() => runWithRequest(label, kind, path, apiId, body, fn)}>
               {loading === label ? '호출 중...' : label}
             </button>
           ))}
         </div>
       </div>
 
-      <div style={styles.section}>
-        <h4 style={styles.subheading}>국내 입출금내역 (kt00015)</h4>
+      <div className="card">
+        <h4 className="section-label">국내 입출금내역 (kt00015)</h4>
         <div style={styles.btnRow}>
-          <input type="date" value={flowFrom} onChange={e => setFlowFrom(e.target.value)} style={styles.input} />
-          <span style={styles.tilde}>~</span>
-          <input type="date" value={flowTo} onChange={e => setFlowTo(e.target.value)} style={styles.input} />
+          <input type="date" value={flowFrom} onChange={e => setFlowFrom(e.target.value)} className="input input-sm" />
+          <span className="text-muted">~</span>
+          <input type="date" value={flowTo} onChange={e => setFlowTo(e.target.value)} className="input input-sm" />
           <button
-            style={styles.btn}
+            className="btn btn-outline-blue btn-sm"
             disabled={!!loading}
             onClick={() => {
               const strt = flowFrom.replace(/-/g, ''), end = flowTo.replace(/-/g, '')
@@ -109,19 +109,19 @@ export default function KiwoomTest() {
         </div>
       </div>
 
-      <div style={styles.section}>
-        <h4 style={styles.subheading}>일봉 차트 (ka10081 / usa06012)</h4>
+      <div className="card">
+        <h4 className="section-label">일봉 차트 (ka10081 / usa06012)</h4>
         <div style={styles.btnRow}>
-          <select value={chartMarket} onChange={e => setChartMarket(e.target.value)} style={styles.input}>
+          <select value={chartMarket} onChange={e => setChartMarket(e.target.value)} className="select input-sm">
             <option value="kr">국내</option>
             <option value="us">해외</option>
           </select>
-          <input placeholder="종목코드" value={chartCode} onChange={e => setChartCode(e.target.value)} style={styles.input} />
-          <input type="date" value={chartFrom} onChange={e => setChartFrom(e.target.value)} style={styles.input} />
-          <span style={styles.tilde}>~</span>
-          <input type="date" value={chartTo} onChange={e => setChartTo(e.target.value)} style={styles.input} />
+          <input placeholder="종목코드" value={chartCode} onChange={e => setChartCode(e.target.value)} className="input input-sm" />
+          <input type="date" value={chartFrom} onChange={e => setChartFrom(e.target.value)} className="input input-sm" />
+          <span className="text-muted">~</span>
+          <input type="date" value={chartTo} onChange={e => setChartTo(e.target.value)} className="input input-sm" />
           <button
-            style={styles.btn}
+            className="btn btn-outline-blue btn-sm"
             disabled={!!loading || !chartCode}
             onClick={() => {
               const toDt = chartTo.replace(/-/g, '')
@@ -139,16 +139,16 @@ export default function KiwoomTest() {
         </div>
       </div>
 
-      <div style={styles.section}>
-        <h4 style={styles.subheading}>커스텀 요청</h4>
+      <div className="card">
+        <h4 className="section-label">커스텀 요청</h4>
         <div style={{ ...styles.btnRow, marginBottom: 8 }}>
-          <select value={rawKind} onChange={e => setRawKind(e.target.value)} style={styles.input}>
+          <select value={rawKind} onChange={e => setRawKind(e.target.value)} className="select input-sm">
             <option value="kr">국내</option>
             <option value="us">해외</option>
           </select>
-          <input placeholder="path (예: /api/dostk/acnt)" value={rawPath} onChange={e => setRawPath(e.target.value)} style={{ ...styles.input, width: 220 }} />
-          <input placeholder="api-id (예: kt00018)" value={rawApiId} onChange={e => setRawApiId(e.target.value)} style={styles.input} />
-          <button style={styles.btn} disabled={!!loading || !rawApiId} onClick={runRaw}>
+          <input placeholder="path (예: /api/dostk/acnt)" value={rawPath} onChange={e => setRawPath(e.target.value)} className="input input-sm" style={{ width: 220 }} />
+          <input placeholder="api-id (예: kt00018)" value={rawApiId} onChange={e => setRawApiId(e.target.value)} className="input input-sm" />
+          <button className="btn btn-outline-blue btn-sm" disabled={!!loading || !rawApiId} onClick={runRaw}>
             {loading === '커스텀' ? '호출 중...' : '호출'}
           </button>
         </div>
@@ -156,15 +156,16 @@ export default function KiwoomTest() {
           value={rawBody}
           onChange={e => setRawBody(e.target.value)}
           spellCheck={false}
-          style={styles.textarea}
+          className="textarea"
+          style={{ minHeight: 140, fontSize: 12 }}
         />
       </div>
 
       {error && <div style={styles.error}>에러: {error}</div>}
 
       {result !== null && (
-        <div style={styles.section}>
-          <h4 style={styles.subheading}>응답 ({Array.isArray(result) ? `${result.length}건` : '객체'})</h4>
+        <div className="card">
+          <h4 className="section-label">응답 ({Array.isArray(result) ? `${result.length}건` : '객체'})</h4>
           <pre style={styles.pre}>{JSON.stringify(result, null, 2)}</pre>
         </div>
       )}
@@ -173,15 +174,7 @@ export default function KiwoomTest() {
 }
 
 const styles = {
-  heading: { color: '#f1f5f9', fontSize: 22, fontWeight: 700, margin: 0 },
-  desc: { color: '#64748b', fontSize: 13, margin: '8px 0 20px' },
-  section: { background: '#1e293b', borderRadius: 12, padding: '16px 20px', marginBottom: 12 },
-  subheading: { color: '#94a3b8', fontSize: 13, fontWeight: 600, margin: '0 0 10px' },
   btnRow: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
-  btn: { background: 'transparent', color: '#93c5fd', border: '1px solid #1d4ed8', borderRadius: 6, padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
-  input: { background: '#0f172a', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '6px 10px', fontSize: 13, outline: 'none' },
-  tilde: { color: '#64748b' },
   error: { color: '#f87171', background: '#1e293b', borderRadius: 8, padding: '12px 16px', marginBottom: 12, fontSize: 13, whiteSpace: 'pre-wrap' },
-  textarea: { width: '100%', minHeight: 140, background: '#0f172a', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '10px 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box', resize: 'vertical' },
   pre: { color: '#e2e8f0', fontSize: 12, overflow: 'auto', maxHeight: 500, margin: 0 },
 }

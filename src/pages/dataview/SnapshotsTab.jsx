@@ -5,11 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useAccounts } from '../../hooks/useAccounts'
 import { getAllAccountEval } from '../../utils/firestore'
 import { LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, sumCategoryValues } from '../../utils/holdingsAgg'
-import { fmt, styles } from './shared'
-
-const th = { ...styles.th, padding: '9px 6px' }
-const thR = { ...th, textAlign: 'right' }
-const td = { ...styles.td, padding: '9px 6px' }
+import { fmt } from './shared'
 
 // ── 계좌통합 조회 탭 (계좌별평가를 일자별로 합산) ───────────────
 export default function SnapshotsTab() {
@@ -88,54 +84,54 @@ export default function SnapshotsTab() {
     XLSX.writeFile(wb, '계좌통합조회_전체.xlsx')
   }
 
-  if (loading) return <div style={styles.loading}>로딩 중...</div>
-  if (loadError) return <div style={{ color: '#f87171', padding: 20, fontSize: 13 }}>{loadError}<br /><button style={{ marginTop: 10, ...styles.rowDel }} onClick={load}>재시도</button></div>
-  if (!sorted.length) return <div style={styles.empty}>저장된 계좌별평가 데이터가 없습니다.</div>
+  if (loading) return <div className="loading">로딩 중...</div>
+  if (loadError) return <div className="neg" style={{ padding: 20, fontSize: 13 }}>{loadError}<br /><button className="btn btn-outline-red btn-sm" style={{ marginTop: 10 }} onClick={load}>재시도</button></div>
+  if (!sorted.length) return <div className="empty">저장된 계좌별평가 데이터가 없습니다.</div>
 
   return (
     <div>
-      <div style={{ ...styles.toolbar, justifyContent: 'flex-end' }}>
-        <button style={styles.exportBtn} onClick={handleExport}>
+      <div className="toolbar" style={{ justifyContent: 'flex-end' }}>
+        <button className="btn btn-outline-green btn-sm" onClick={handleExport}>
           데이터 엑셀 다운로드
         </button>
       </div>
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
+      <div className="table-wrap">
+        <table className="data-table compact">
           <thead>
             <tr>
-              <th style={th}>날짜</th>
-              <th style={thR}>국내</th>
-              <th style={thR}>증감</th>
-              <th style={thR}>해외</th>
-              <th style={thR}>증감</th>
-              <th style={thR}>연금</th>
-              <th style={thR}>증감</th>
-              <th style={thR}>선물옵션</th>
-              <th style={thR}>증감</th>
-              <th style={thR}>총잔액</th>
-              <th style={thR}>총증감</th>
-              <th style={thR}>증가율</th>
-              <th style={thR}>대출금</th>
-              <th style={thR}>순자산</th>
+              <th>날짜</th>
+              <th className="r">국내</th>
+              <th className="r">증감</th>
+              <th className="r">해외</th>
+              <th className="r">증감</th>
+              <th className="r">연금</th>
+              <th className="r">증감</th>
+              <th className="r">선물옵션</th>
+              <th className="r">증감</th>
+              <th className="r">총잔액</th>
+              <th className="r">총증감</th>
+              <th className="r">증가율</th>
+              <th className="r">대출금</th>
+              <th className="r">순자산</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map(row => (
-              <tr key={row.date} style={styles.tr}>
-                <td style={td}>{row.date}</td>
-                <td style={{ ...td, textAlign: 'right' }}>{fmt(row.domestic)}</td>
-                <td style={{ ...td, textAlign: 'right', color: row.domesticChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.domesticChange)}</td>
-                <td style={{ ...td, textAlign: 'right' }}>{fmt(row.overseas)}</td>
-                <td style={{ ...td, textAlign: 'right', color: row.overseasChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.overseasChange)}</td>
-                <td style={{ ...td, textAlign: 'right' }}>{fmt(row.pension)}</td>
-                <td style={{ ...td, textAlign: 'right', color: row.pensionChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.pensionChange)}</td>
-                <td style={{ ...td, textAlign: 'right' }}>{fmt(row.futures)}</td>
-                <td style={{ ...td, textAlign: 'right', color: row.futuresChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.futuresChange)}</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{fmt(row.totalBalance)}</td>
-                <td style={{ ...td, textAlign: 'right', color: row.totalChange >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.totalChange)}</td>
-                <td style={{ ...td, textAlign: 'right', color: row.totalChangeRate >= 0 ? '#4ade80' : '#f87171' }}>{Number(row.totalChangeRate ?? 0).toFixed(2)}%</td>
-                <td style={{ ...td, textAlign: 'right', color: '#f87171' }}>{row.totalLoan > 0 ? fmt(row.totalLoan) : '-'}</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#a78bfa' }}>{fmt(row.netBalance)}</td>
+              <tr key={row.date}>
+                <td>{row.date}</td>
+                <td className="r">{fmt(row.domestic)}</td>
+                <td className={'r ' + (row.domesticChange >= 0 ? 'pos' : 'neg')}>{fmt(row.domesticChange)}</td>
+                <td className="r">{fmt(row.overseas)}</td>
+                <td className={'r ' + (row.overseasChange >= 0 ? 'pos' : 'neg')}>{fmt(row.overseasChange)}</td>
+                <td className="r">{fmt(row.pension)}</td>
+                <td className={'r ' + (row.pensionChange >= 0 ? 'pos' : 'neg')}>{fmt(row.pensionChange)}</td>
+                <td className="r">{fmt(row.futures)}</td>
+                <td className={'r ' + (row.futuresChange >= 0 ? 'pos' : 'neg')}>{fmt(row.futuresChange)}</td>
+                <td className="r bold">{fmt(row.totalBalance)}</td>
+                <td className={'r ' + (row.totalChange >= 0 ? 'pos' : 'neg')}>{fmt(row.totalChange)}</td>
+                <td className={'r ' + (row.totalChangeRate >= 0 ? 'pos' : 'neg')}>{Number(row.totalChangeRate ?? 0).toFixed(2)}%</td>
+                <td className="r neg">{row.totalLoan > 0 ? fmt(row.totalLoan) : '-'}</td>
+                <td className="r bold purple">{fmt(row.netBalance)}</td>
               </tr>
             ))}
           </tbody>

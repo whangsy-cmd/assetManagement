@@ -1,6 +1,7 @@
 // 로그인 화면 (Google 로그인)
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import '../common.css'
 
 export default function Login() {
   const { login } = useAuth()
@@ -32,7 +33,7 @@ export default function Login() {
           />
           {loading ? '로그인 중...' : 'Google 계정으로 로그인'}
         </button>
-        {error && <p style={styles.error}>{error}</p>}
+        {error && <p className="text-error" style={{ marginTop: 16, wordBreak: 'break-all' }}>{error}</p>}
       </div>
     </div>
   )
@@ -79,11 +80,5 @@ const styles = {
     cursor: 'pointer',
     width: '100%',
     transition: 'opacity 0.2s',
-  },
-  error: {
-    color: '#f87171',
-    fontSize: 13,
-    marginTop: 16,
-    wordBreak: 'break-all',
   },
 }

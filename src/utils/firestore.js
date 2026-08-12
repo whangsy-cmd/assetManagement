@@ -97,35 +97,6 @@ export async function getAllHoldings(uid) {
     .sort((a, b) => b.date.localeCompare(a.date))
 }
 
-// ── 입출금내역 저장 (거래번호 기준 중복방지) ────────────────
-export async function saveCashFlows(uid, rows) {
-  const noAccount = rows.find(r => !r.accountId)
-  if (noAccount) throw new Error(`계좌번호가 없는 데이터가 있습니다: ${noAccount.date} ${noAccount.memo}`)
-  for (let i = 0; i < rows.length; i += 500) {
-    const batch = writeBatch(db)
-    for (const r of rows.slice(i, i + 500)) {
-      const id = `${r.accountId}_${r.tradeNo}`
-      const ref = doc(db, 'users', uid, 'cashFlows', id)
-      batch.set(ref, { ...r, id, createdAt: serverTimestamp() })
-    }
-    await batch.commit()
-  }
-}
-
-// ── 전체 입출금내역 조회 (데이터 조회용) ────────────────────
-export async function getAllCashFlows(uid) {
-  const snap = await getDocs(collection(db, 'users', uid, 'cashFlows'))
-  return snap.docs.map(d => ({ docId: d.id, ...d.data() }))
-    .sort((a, b) => b.date.localeCompare(a.date))
-}
-
-// ── 계좌별 마지막 입출금내역 날짜 조회 ──────────────────────
-export async function getLastCashFlowDate(uid, accountId) {
-  const snap = await getDocs(collection(db, 'users', uid, 'cashFlows'))
-  const dates = snap.docs.map(d => d.data()).filter(d => d.accountId === accountId).map(d => d.date)
-  return dates.length ? dates.sort().at(-1) : null
-}
-
 // ── 계좌별 평가 테이블 저장/조회 (holdings+cash 집계 결과 materialize) ──
 export async function saveAccountEval(uid, rows) {
   for (let i = 0; i < rows.length; i += 500) {
@@ -248,6 +219,12 @@ export async function saveTransactions(uid, rows) {
 
 export async function getTransactionsByAccount(uid, accountId) {
   const snap = await getDocs(query(collection(db, 'users', uid, 'transactions'), where('accountId', '==', accountId)))
+  return snap.docs.map(d => ({ docId: d.id, ...d.data() })).sort((a, b) => b.date.localeCompare(a.date))
+}
+
+// ── 전체 거래내역 조회 (계좌 무관, 종목별 조회용) ────────────
+export async function getAllTransactions(uid) {
+  const snap = await getDocs(collection(db, 'users', uid, 'transactions'))
   return snap.docs.map(d => ({ docId: d.id, ...d.data() })).sort((a, b) => b.date.localeCompare(a.date))
 }
 

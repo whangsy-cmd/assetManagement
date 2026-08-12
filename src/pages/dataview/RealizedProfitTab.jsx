@@ -2,11 +2,13 @@
 import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAccounts } from '../../hooks/useAccounts'
 import { getAllRealizedProfits, saveRealizedProfits, deleteDocument } from '../../utils/firestore'
-import { fmt, styles } from './shared'
+import { fmt } from './shared'
 
 export default function RealizedProfitTab() {
   const { user } = useAuth()
+  const { accounts } = useAccounts()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedAccount, setSelectedAccount] = useState('전체')
@@ -19,7 +21,11 @@ export default function RealizedProfitTab() {
     load()
   }, [])
 
-  const accountIds = [...new Set(data.map(d => d.accountId))].sort()
+  const presentIds = new Set(data.map(d => d.accountId))
+  const accountIds = [
+    ...accounts.map(a => a.accountId).filter(id => presentIds.has(id)),
+    ...[...presentIds].filter(id => !accounts.some(a => a.accountId === id)).sort(),
+  ]
   const filtered = selectedAccount === '전체' ? data : data.filter(d => d.accountId === selectedAccount)
   const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId))
 
@@ -63,63 +69,63 @@ export default function RealizedProfitTab() {
     XLSX.writeFile(wb, `실현손익조회_${selectedAccount}.xlsx`)
   }
 
-  if (loading) return <div style={styles.loading}>로딩 중...</div>
-  if (!data.length) return <div style={styles.empty}>저장된 실현손익 데이터가 없습니다.</div>
+  if (loading) return <div className="loading">로딩 중...</div>
+  if (!data.length) return <div className="empty">저장된 실현손익 데이터가 없습니다.</div>
 
   return (
     <div>
-      <div style={styles.toolbar}>
-        <div style={styles.dateRow}>
-          <span style={styles.toolLabel}>계좌 선택</span>
-          <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)} style={styles.stockSelect}>
+      <div className="toolbar">
+        <div className="date-row">
+          <span className="tool-label">계좌 선택</span>
+          <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)} className="select input-sm" style={{ maxWidth: 260 }}>
             <option value="전체">전체</option>
             {accountIds.map(id => <option key={id} value={id}>{id}</option>)}
           </select>
         </div>
-        <div style={styles.toolRight}>
-          <button style={styles.exportBtn} onClick={handleExport}>
+        <div className="tool-right">
+          <button className="btn btn-outline-green btn-sm" onClick={handleExport}>
             데이터 엑셀 다운로드
           </button>
-          <button style={styles.dateDel} onClick={handleTruncate} disabled={truncating || !decimalRows.length}>
+          <button className="btn btn-outline-orange btn-sm" onClick={handleTruncate} disabled={truncating || !decimalRows.length}>
             {truncating ? '절사 중...' : `원미만 절사 (${decimalRows.length}건)`}
           </button>
         </div>
       </div>
 
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
+      <div className="table-wrap">
+        <table className="data-table">
           <thead>
             <tr>
-              <th style={styles.th}>일자</th>
-              <th style={styles.th}>계좌</th>
-              <th style={styles.th}>종목코드</th>
-              <th style={styles.th}>종목명</th>
-              <th style={{ ...styles.th, textAlign: 'right' }}>실현손익</th>
-              <th style={{ ...styles.th, textAlign: 'right' }}>수수료</th>
-              <th style={styles.th}></th>
+              <th>일자</th>
+              <th>계좌</th>
+              <th>종목코드</th>
+              <th>종목명</th>
+              <th className="r">실현손익</th>
+              <th className="r">수수료</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {sorted.map(row => (
-              <tr key={row.docId} style={styles.tr}>
-                <td style={styles.td}>{row.date}</td>
-                <td style={styles.td}>{row.accountId}</td>
-                <td style={styles.td}>{row.code || '-'}</td>
-                <td style={styles.td}>{row.name || '-'}</td>
-                <td style={{ ...styles.td, textAlign: 'right', color: row.realizedProfit >= 0 ? '#4ade80' : '#f87171' }}>{fmt(row.realizedProfit)}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>{fmt(row.fee)}</td>
-                <td style={styles.td}>
-                  <button style={styles.rowDel} onClick={() => handleDeleteRow(row)}>삭제</button>
+              <tr key={row.docId}>
+                <td>{row.date}</td>
+                <td>{row.accountId}</td>
+                <td>{row.code || '-'}</td>
+                <td>{row.name || '-'}</td>
+                <td className={'r ' + (row.realizedProfit >= 0 ? 'pos' : 'neg')}>{fmt(row.realizedProfit)}</td>
+                <td className="r">{fmt(row.fee)}</td>
+                <td>
+                  <button className="btn btn-outline-red btn-sm" onClick={() => handleDeleteRow(row)}>삭제</button>
                 </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr style={{ borderTop: '2px solid #334155' }}>
-              <td style={{ ...styles.td, fontWeight: 700 }} colSpan={4}>합계</td>
-              <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, color: totalProfit >= 0 ? '#4ade80' : '#f87171' }}>{fmt(totalProfit)}</td>
-              <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700 }}>{fmt(totalFee)}</td>
-              <td style={styles.td}></td>
+            <tr className="total-row">
+              <td className="bold" colSpan={4}>합계</td>
+              <td className={'r bold ' + (totalProfit >= 0 ? 'pos' : 'neg')}>{fmt(totalProfit)}</td>
+              <td className="r bold">{fmt(totalFee)}</td>
+              <td></td>
             </tr>
           </tfoot>
         </table>

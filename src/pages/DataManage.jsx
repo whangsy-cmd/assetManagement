@@ -3,7 +3,6 @@ import { useState } from 'react'
 import AccountSetup from './AccountSetup'
 import SectorManager from './SectorManager'
 import StockCodeManager from './StockCodeManager'
-import { styles } from './dataview/shared'
 import '../common.css'
 
 const TABS = ['계좌 관리', '섹터 관리', '종목코드 등록']
@@ -13,21 +12,21 @@ export default function DataManage() {
 
   return (
     <div className="page">
-      <div style={styles.headingRow}>
-        <h2 style={styles.heading}>데이터 관리</h2>
+      <div className="page-heading-row">
+        <h2 className="page-heading">데이터 관리</h2>
       </div>
 
-      <div style={styles.tabs}>
+      <div className="tabs">
         {TABS.map((t, i) => (
           <button
             key={i}
-            style={{ ...styles.tab, ...(i === tab ? styles.tabActive : {}) }}
+            className={'tab' + (i === tab ? ' active' : '')}
             onClick={() => setTab(i)}
           >{t}</button>
         ))}
       </div>
 
-      <div style={styles.content}>
+      <div className="card">
         {tab === 0 && <AccountSetup />}
         {tab === 1 && <SectorManager />}
         {tab === 2 && <StockCodeManager />}
