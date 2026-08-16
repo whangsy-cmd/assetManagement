@@ -65,3 +65,32 @@ export function sumCategoryValues(sums) {
 export function latestCashByAccount(rowsByAccount) {
   return new Map([...rowsByAccount].map(([id, arr]) => [id, arr.at(-1)?.cashAmt || 0]))
 }
+
+// 계좌별평가+대출 rows를 일자별 카테고리 합계 요약(전일 대비 증감 포함)으로 변환 — 계좌통합조회/성과분석 공용
+export function buildDailySummary(evalRows, loanRows, accCatMap) {
+  const rowsByAccount = buildRowsByAccount(evalRows)
+  const loanByDate = new Map(loanRows.map(r => [r.date, -(r.totalAmt || 0)]))
+  const loanDates = [...loanByDate.keys()].sort()
+  const loanAsOf = date => {
+    let v = 0
+    for (const d of loanDates) { if (d > date) break; v = loanByDate.get(d) }
+    return v
+  }
+  const evalDates = [...new Set(evalRows.map(r => r.date))].sort()
+  const summary = evalDates.map(date => {
+    const s = categorySumsAsOf(rowsByAccount, date, accCatMap)
+    const totalBalance = sumCategoryValues(s)
+    const totalLoan = loanAsOf(date)
+    return { date, domestic: s.domestic, overseas: s.overseas, pension: s.pension, futures: s.futures || 0, totalBalance, totalLoan, netBalance: totalBalance - totalLoan }
+  })
+  for (let i = 0; i < summary.length; i++) {
+    const prev = i > 0 ? summary[i - 1] : null
+    summary[i].domesticChange = prev ? summary[i].domestic - prev.domestic : 0
+    summary[i].overseasChange = prev ? summary[i].overseas - prev.overseas : 0
+    summary[i].pensionChange = prev ? summary[i].pension - prev.pension : 0
+    summary[i].futuresChange = prev ? summary[i].futures - prev.futures : 0
+    summary[i].totalChange = prev ? summary[i].totalBalance - prev.totalBalance : 0
+    summary[i].totalChangeRate = prev && prev.totalBalance ? (summary[i].totalChange / prev.totalBalance) * 100 : 0
+  }
+  return summary
+}

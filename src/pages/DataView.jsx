@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../contexts/AuthContext'
+import { useTabParam } from '../hooks/useTabParam'
 import { getAllDocsRaw } from '../utils/firestore'
 import HoldingsTab from './dataview/HoldingsTab'
 import AccountEvalTab from './dataview/AccountEvalTab'
@@ -10,10 +11,11 @@ import StockPeriodTab from './dataview/StockPeriodTab'
 import StockProfitTab from './dataview/StockProfitTab'
 import RealizedProfitTab from './dataview/RealizedProfitTab'
 import TransactionsTab from './dataview/TransactionsTab'
+import ConsistencyCheckTab from './dataview/ConsistencyCheckTab'
 import '../common.css'
 
 // 탭 목록과 아래 렌더 스위치(tab === i)의 순서가 반드시 일치해야 함
-const TABS = ['계좌통합 조회', '계좌평가 조회', '실현손익 조회', '보유종목', '거래내역', '종목별 조회', '종목별 손익']
+const TABS = ['계좌통합 조회', '계좌평가 조회', '실현손익 조회', '거래내역', '보유종목', '종목별 조회', '종목별 손익', '정합성 검사']
 
 // 백업 대상 컬렉션. settings(키움 API 키 등 시크릿 포함)는 의도적으로 제외.
 const BACKUP_COLLECTIONS = ['holdings', 'cash', 'snapshots', 'accounts', 'sectors', 'loans', 'incomeReports', 'taxPayments', 'priceSeries', 'cashFlows', 'optionMonthlyProfit', 'accountEval', 'tempAccountDailyBalance', 'realizedProfits', 'transactions']
@@ -30,7 +32,7 @@ function flattenDoc(obj) {
 
 export default function DataView() {
   const { user } = useAuth()
-  const [tab, setTab] = useState(0)
+  const [tab, setTab] = useTabParam(TABS)
   const [refreshKey, setRefreshKey] = useState(0)
   const [backingUp, setBackingUp] = useState(false)
 
@@ -73,10 +75,11 @@ export default function DataView() {
         {tab === 0 && <SnapshotsTab />}
         {tab === 1 && <AccountEvalTab />}
         {tab === 2 && <RealizedProfitTab />}
-        {tab === 3 && <HoldingsTab />}
-        {tab === 4 && <TransactionsTab />}
+        {tab === 3 && <TransactionsTab />}
+        {tab === 4 && <HoldingsTab />}
         {tab === 5 && <StockPeriodTab />}
         {tab === 6 && <StockProfitTab />}
+        {tab === 7 && <ConsistencyCheckTab />}
       </div>
     </div>
   )

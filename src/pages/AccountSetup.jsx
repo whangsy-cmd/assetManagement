@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useAccounts } from '../hooks/useAccounts'
-import { getLoans, saveLoan, deleteLoan, getKiwoomKeys, saveKiwoomKeys } from '../utils/firestore'
+import { getLoans, saveLoan, deleteLoan, getKiwoomKeys, saveKiwoomKeys, getPublicDataApiKey, savePublicDataApiKey } from '../utils/firestore'
 import { clearKiwoomKeysCache } from '../utils/kiwoomApi'
+import { CATEGORY_LABEL } from '../constants'
 import '../common.css'
 
 const INITIAL_ACCOUNTS = [
@@ -14,7 +15,6 @@ const INITIAL_ACCOUNTS = [
 ]
 
 const BROKER_LABEL = { mirae: '미래에셋', kiwoom_kr: '키움 국내', kiwoom_us: '키움 해외', ibk: '기업은행' }
-const CATEGORY_LABEL = { domestic: '국내', overseas: '해외', pension: '연금', futures: '선물옵션' }
 
 export default function AccountSetup() {
   const { user } = useAuth()
@@ -62,6 +62,29 @@ export default function AccountSetup() {
     setKiwoomForm({ kr_appkey: '', kr_secretkey: '', us_appkey: '', us_secretkey: '' })
     loadKiwoomStatus()
     setKiwoomSaving(false)
+  }
+
+  // 공공데이터포털 API 키 (국내 휴장일 조회용)
+  const [publicDataStatus, setPublicDataStatus] = useState(false)
+  const [publicDataKey, setPublicDataKey] = useState('')
+  const [publicDataSaving, setPublicDataSaving] = useState(false)
+
+  const loadPublicDataStatus = () => {
+    getPublicDataApiKey(user.uid).then(key => setPublicDataStatus(!!key))
+  }
+
+  useEffect(() => {
+    if (user) loadPublicDataStatus()
+  }, [user])
+
+  const handleSavePublicData = async (e) => {
+    e.preventDefault()
+    if (!publicDataKey.trim()) return
+    setPublicDataSaving(true)
+    await savePublicDataApiKey(user.uid, publicDataKey.trim())
+    setPublicDataKey('')
+    loadPublicDataStatus()
+    setPublicDataSaving(false)
   }
 
   const handleAddLoan = async (e) => {
@@ -384,6 +407,22 @@ export default function AccountSetup() {
           <input className="input" style={{ flex: 2, minWidth: 140 }} placeholder="해외 secretkey" type="password" value={kiwoomForm.us_secretkey} onChange={e => setKiwoomForm(f => ({ ...f, us_secretkey: e.target.value }))} />
           <button className="btn btn-primary" type="submit" disabled={kiwoomSaving}>
             {kiwoomSaving ? '저장 중...' : '저장'}
+          </button>
+        </form>
+      </div>
+
+      {/* 공공데이터포털 API 키 */}
+      <div className="card">
+        <h3 className="section-title" style={{ marginBottom: 16 }}>공공데이터포털 API 키</h3>
+        <p className="text-muted" style={{ marginBottom: 16 }}>
+          국내 거래내역 결제일→체결일 환산 시 공휴일 조회에 사용 (특일 정보 서비스).{' '}
+          {publicDataStatus ? <span className="pos">등록됨</span> : <span className="neg">미등록</span>}
+          <br />저장 후에는 값이 표시되지 않습니다. 변경하려면 새 값을 입력 후 저장하세요.
+        </p>
+        <form onSubmit={handleSavePublicData} className="form-row">
+          <input className="input" style={{ flex: 2, minWidth: 140 }} placeholder="서비스키" type="password" value={publicDataKey} onChange={e => setPublicDataKey(e.target.value)} />
+          <button className="btn btn-primary" type="submit" disabled={publicDataSaving}>
+            {publicDataSaving ? '저장 중...' : '저장'}
           </button>
         </form>
       </div>

@@ -1,5 +1,5 @@
 // 이자·배당 소득 리포트 화면
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -113,16 +113,7 @@ export default function IncomeReport() {
 
   const [taxPayments, setTaxPayments] = useState([])
   const [taxPasteOpen, setTaxPasteOpen] = useState(false)
-  const [taxPasteText, setTaxPasteText] = useState(
-    '2025-06-23\t양도소득세\t11,110,470\n' +
-    '2025-05-21\t양도소득세\t11,110,470\n' +
-    '2026-08-03\t양도소득세\t22,000,000\n' +
-    '2026-05-27\t양도소득세\t23,310,160\n' +
-    '2026-05-01\t종합소득세\t128,450\n' +
-    '2026-05-27\t지방소득세(양도소득)\t4,531,010\n' +
-    '2026-05-01\t지방소득세(종합소득)\t12,840\n' +
-    '2025-06-23\t지방소득세(양도소득)\t2,222,090'
-  )
+  const [taxPasteText, setTaxPasteText] = useState('')
   const [taxPreview, setTaxPreview] = useState(null)
   const [taxError, setTaxError] = useState('')
   const [taxSaving, setTaxSaving] = useState(false)
@@ -344,7 +335,7 @@ export default function IncomeReport() {
               value={taxPasteText}
               onChange={e => setTaxPasteText(e.target.value)}
               rows={6}
-              placeholder={'2025-06-23\t양도소득세\t11,110,470'}
+              placeholder={'2025-06-23\t\t11,110,470'}
             />
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <button className="btn btn-sm" style={{ background: '#7c3aed', color: '#fff' }} onClick={handleTaxParse}>미리보기</button>
@@ -383,15 +374,30 @@ export default function IncomeReport() {
                 <tr><th>납부일자</th><th>세목</th><th className="r">납부세액</th><th></th></tr>
               </thead>
               <tbody>
-                {taxPayments.map(r => (
-                  <tr key={r.docId}>
-                    <td>{r.date}</td>
-                    <td>{r.taxType}</td>
-                    <td className="r">{fmt(r.amount)}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button className="btn btn-outline btn-sm" onClick={() => handleTaxDeleteRow(r.docId)}>삭제</button>
-                    </td>
-                  </tr>
+                {Object.entries(
+                  taxPayments.reduce((acc, r) => {
+                    const year = r.date.slice(0, 4)
+                    ;(acc[year] ||= []).push(r)
+                    return acc
+                  }, {})
+                ).sort((a, b) => b[0].localeCompare(a[0])).map(([year, rows]) => (
+                  <Fragment key={year}>
+                    {rows.map(r => (
+                      <tr key={r.docId}>
+                        <td>{r.date}</td>
+                        <td>{r.taxType}</td>
+                        <td className="r">{fmt(r.amount)}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button className="btn btn-outline btn-sm" onClick={() => handleTaxDeleteRow(r.docId)}>삭제</button>
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="total-row" style={{ background: '#0f172a' }}>
+                      <td colSpan={2} style={{ fontWeight: 600, color: '#93c5fd' }}>{year}년 소계</td>
+                      <td className="r" style={{ fontWeight: 600, color: '#93c5fd' }}>{fmt(rows.reduce((s, r) => s + (r.amount || 0), 0))}</td>
+                      <td></td>
+                    </tr>
+                  </Fragment>
                 ))}
                 <tr className="total-row">
                   <td colSpan={2} style={{ fontWeight: 700 }}>합계</td>

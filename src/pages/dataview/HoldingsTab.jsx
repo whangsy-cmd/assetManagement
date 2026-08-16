@@ -87,7 +87,7 @@ export default function HoldingsTab() {
     <div>
       <div className="toolbar">
         <div className="date-row">
-          <span className="tool-label">날짜 선택</span>
+          <span className="tool-label">날짜</span>
           <DateSelect id="holdings-dates" dates={dates} value={selectedDate} onChange={setSelectedDate} />
         </div>
         <div className="tool-right">

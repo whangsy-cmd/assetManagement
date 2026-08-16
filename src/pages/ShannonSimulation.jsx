@@ -2,15 +2,11 @@
 import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
-import { getSavedSymbols, getPriceSeries, downloadMissingRange, addDays, parseCsvPrices, saveCsvPrices } from '../utils/priceData'
-import { deleteDocument } from '../utils/firestore'
+import { getSavedSymbols, getPriceSeries } from '../utils/priceData'
 import { sgn, pc } from '../utils/format'
 import { maxDrawdown } from '../utils/finance'
 import InputField, { numInputStyle } from '../components/InputField'
 import '../common.css'
-
-const TODAY = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
-const DEFAULT_FROM = addDays(TODAY, -365 * 3)
 
 // ── 셰넌 리밸런싱 시뮬레이션 (순수 함수) ────────────────────
 // 안전자산은 현금이든 종목이든 연 배당률을 월 1회(월 넘어갈 때) 복리로 반영한다.
@@ -38,200 +34,40 @@ function simulateTwoAsset(dates, riskyCloseOf, safeCloseOf, safeAnnualDividendPc
     const total = riskyVal + safeVal
     const curSafePct = total > 0 ? (safeVal / total) * 100 : 0
     let rebalanced = false
+    let rebalanceDirection = null
     if (Math.abs(curSafePct - targetSafePct) > band) {
+      const riskyBefore = riskyVal
       safeVal = total * targetSafePct / 100
       riskyVal = total * (100 - targetSafePct) / 100
       rebalanceCount++
       rebalanced = true
+      rebalanceDirection = riskyVal > riskyBefore ? 'buy' : 'sell'
     }
-    path.push({ date: dates[i], total, riskyAlone, safeAlone, rebalanced })
+    path.push({ date: dates[i], total, riskyAlone, safeAlone, rebalanced, rebalanceDirection })
   }
   return { path, rebalanceCount }
 }
 
 function RebalanceDot({ cx, cy, payload }) {
   if (!payload.rebalanced) return null
-  return <circle cx={cx} cy={cy} r={4} fill="#f59e0b" stroke="#78350f" strokeWidth={1} />
+  const buy = payload.rebalanceDirection === 'buy'
+  return <circle cx={cx} cy={cy} r={4} fill={buy ? '#22c55e' : '#ef4444'} stroke={buy ? '#14532d' : '#7f1d1d'} strokeWidth={1} />
 }
 
 export default function ShannonSimulation() {
   const { user } = useAuth()
-  const [tab, setTab] = useState('sim')
   const [savedSymbols, setSavedSymbols] = useState([])
-  const [symbolsLoading, setSymbolsLoading] = useState(true)
 
-  const refreshSymbols = async () => {
+  useEffect(() => {
     if (!user) return
-    setSymbolsLoading(true)
-    setSavedSymbols(await getSavedSymbols(user.uid))
-    setSymbolsLoading(false)
-  }
-
-  useEffect(() => { refreshSymbols() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [user])
+    getSavedSymbols(user.uid).then(setSavedSymbols)
+  }, [user])
 
   if (!user) return null
 
-  return (
-    <div className="page">
-      <div className="page-heading-row">
-        <h2 className="page-heading">셰넌의 법칙 시뮬레이션</h2>
-        <span className="page-heading-sub">2개 종목(현금 포함) 리밸런싱 수익률 시뮬레이션</span>
-      </div>
-
-      <div className="toggle-group" style={{ marginBottom: 12 }}>
-        <button className={`toggle-btn${tab === 'sim' ? ' active' : ''}`} onClick={() => setTab('sim')}>시뮬레이션</button>
-        <button className={`toggle-btn${tab === 'symbols' ? ' active' : ''}`} onClick={() => setTab('symbols')}>종목관리</button>
-      </div>
-
-      {tab === 'symbols'
-        ? <SymbolManageTab user={user} savedSymbols={savedSymbols} symbolsLoading={symbolsLoading} refreshSymbols={refreshSymbols} />
-        : <SimulationTab user={user} savedSymbols={savedSymbols} />
-      }
-    </div>
-  )
+  return <SimulationTab user={user} savedSymbols={savedSymbols} />
 }
 
-// ── 종목관리 탭 ───────────────────────────────────────────────
-function SymbolManageTab({ user, savedSymbols, symbolsLoading, refreshSymbols }) {
-  const [dlCode, setDlCode] = useState('')
-  const [dlName, setDlName] = useState('')
-  const [dlFrom, setDlFrom] = useState(DEFAULT_FROM)
-  const [dlTo, setDlTo] = useState(TODAY)
-  const [dlStatus, setDlStatus] = useState({ loading: false, msg: '', error: '' })
-
-  const [csvCode, setCsvCode] = useState('')
-  const [csvName, setCsvName] = useState('')
-  const [csvText, setCsvText] = useState('')
-  const [csvStatus, setCsvStatus] = useState({ loading: false, msg: '', error: '' })
-
-  const handleDownload = async () => {
-    if (!dlCode.trim()) return
-    setDlStatus({ loading: true, msg: '', error: '' })
-    try {
-      const { added, total } = await downloadMissingRange(user.uid, dlCode.trim(), dlName.trim(), dlFrom, dlTo)
-      setDlStatus({ loading: false, msg: added > 0 ? `${added}건 추가 저장 (총 ${total}건)` : `이미 최신 상태 (총 ${total}건)`, error: '' })
-      refreshSymbols()
-    } catch (e) {
-      setDlStatus({ loading: false, msg: '', error: e.message })
-    }
-  }
-
-  const handleDeleteSymbol = async (code) => {
-    if (!window.confirm(`${code} 가격 데이터를 삭제할까요?`)) return
-    await deleteDocument(user.uid, 'priceSeries', code)
-    refreshSymbols()
-  }
-
-  const handleCsvFile = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      setCsvText(String(reader.result))
-      if (!csvCode.trim()) {
-        const base = file.name.replace(/\.csv$/i, '')
-        setCsvCode(base.split(/[_\s]/)[0].toUpperCase())
-      }
-    }
-    reader.readAsText(file)
-    e.target.value = ''
-  }
-
-  const handleCsvImport = async () => {
-    if (!csvCode.trim() || !csvText.trim()) return
-    setCsvStatus({ loading: true, msg: '', error: '' })
-    try {
-      const rows = parseCsvPrices(csvText)
-      const { added, total } = await saveCsvPrices(user.uid, csvCode.trim(), csvName.trim(), rows)
-      setCsvStatus({ loading: false, msg: `${added}건 반영 (총 ${total}건)`, error: '' })
-      setCsvText('')
-      refreshSymbols()
-    } catch (e) {
-      setCsvStatus({ loading: false, msg: '', error: e.message })
-    }
-  }
-
-  return (
-    <div className="card">
-      <div className="section-header">
-        <h3 className="section-title">저장된 종목 목록</h3>
-        <button className="toggle-btn" onClick={refreshSymbols}>↺ 새로고침</button>
-      </div>
-
-      <div style={{ ...boxStyle, marginBottom: 14 }}>
-        <div className="form-row" style={{ gap: 12, alignItems: 'flex-end' }}>
-          <InputField label="종목코드"><input placeholder="예: 069500, AAPL" value={dlCode} onChange={e => setDlCode(e.target.value.trim())} style={{ ...numInputStyle, width: 130 }} /></InputField>
-          <InputField label="종목명"><input placeholder="종목명" value={dlName} onChange={e => setDlName(e.target.value)} style={{ ...numInputStyle, width: 110 }} /></InputField>
-          <InputField label="시작일"><input type="date" value={dlFrom} onChange={e => setDlFrom(e.target.value)} style={numInputStyle} /></InputField>
-          <InputField label="종료일"><input type="date" value={dlTo} onChange={e => setDlTo(e.target.value)} style={numInputStyle} /></InputField>
-          <button className="toggle-btn active" onClick={handleDownload} disabled={dlStatus.loading || !dlCode}>
-            {dlStatus.loading ? '다운로드 중...' : '가격 데이터 다운로드'}
-          </button>
-        </div>
-        {dlStatus.msg && <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>{dlStatus.msg}</p>}
-        {dlStatus.error && <p className="text-error" style={{ marginTop: 8 }}>{dlStatus.error}</p>}
-        <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>
-          이미 저장된 구간은 건너뛰고 없는 구간만 내려받습니다. 6자리 숫자 코드는 국내(키움 ka10081), 그 외는 미국 종목(키움 usa06012)으로 조회합니다. 키움이 지원하지 않는 종목(레버리지 ETF 등)은 아래 CSV 가져오기를 이용하세요.
-        </p>
-      </div>
-
-      <div style={{ ...boxStyle, marginBottom: 14 }}>
-        <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 13, marginBottom: 8 }}>CSV 파일 가져오기</div>
-        <div className="form-row" style={{ gap: 12, marginBottom: 10, alignItems: 'flex-end' }}>
-          <InputField label="종목코드"><input placeholder="예: SOXL" value={csvCode} onChange={e => setCsvCode(e.target.value.trim())} style={{ ...numInputStyle, width: 130 }} /></InputField>
-          <InputField label="종목명"><input placeholder="종목명" value={csvName} onChange={e => setCsvName(e.target.value)} style={{ ...numInputStyle, width: 110 }} /></InputField>
-          <InputField label="CSV 파일">
-            <input type="file" accept=".csv,text/csv" onChange={handleCsvFile} style={{ ...numInputStyle, width: 220, padding: '4px 6px' }} />
-          </InputField>
-        </div>
-        <textarea
-          className="textarea"
-          value={csvText}
-          onChange={e => setCsvText(e.target.value)}
-          placeholder={'파일을 선택하면 내용이 여기 표시됩니다. 직접 붙여넣기도 가능: date,close\n2024-01-02,187.15\n...'}
-          rows={5}
-          style={{ fontSize: 12, marginBottom: 8 }}
-        />
-        <button className="toggle-btn active" onClick={handleCsvImport} disabled={csvStatus.loading || !csvCode || !csvText}>
-          {csvStatus.loading ? '가져오는 중...' : 'CSV 가져오기'}
-        </button>
-        {csvStatus.msg && <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>{csvStatus.msg}</p>}
-        {csvStatus.error && <p className="text-error" style={{ marginTop: 8 }}>{csvStatus.error}</p>}
-        <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>
-          Shannon/fetch_stock.py로 로컬에서 받은 결과(예: <code>python fetch_stock.py SOXL 2022-01-01 2024-12-31</code> 실행 후 출력된 date,close CSV)를 붙여넣으면 됩니다.
-        </p>
-      </div>
-
-      {symbolsLoading ? (
-        <p className="dim">불러오는 중...</p>
-      ) : savedSymbols.length === 0 ? (
-        <p className="dim">저장된 가격 데이터가 없습니다. 위에서 종목을 다운로드하세요.</p>
-      ) : (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr><th>코드</th><th>이름</th><th>시장</th><th className="r">구간</th><th className="r">건수</th><th></th></tr>
-            </thead>
-            <tbody>
-              {savedSymbols.map(s => (
-                <tr key={s.code}>
-                  <td>{s.code}</td>
-                  <td>{s.name}</td>
-                  <td className="dim">{s.market}</td>
-                  <td className="r dim">{s.minDate} ~ {s.maxDate}</td>
-                  <td className="r">{s.count}</td>
-                  <td className="r"><button className="toggle-btn" style={{ color: '#f87171', borderColor: '#7f1d1d' }} onClick={() => handleDeleteSymbol(s.code)}>삭제</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── 시뮬레이션 탭 ─────────────────────────────────────────────
 function SimulationTab({ user, savedSymbols }) {
   const [riskyAsset, setRiskyAsset] = useState({ code: '', name: '' })
   const [safeAsset, setSafeAsset] = useState({ mode: 'cash', code: '', name: '현금', dividendRate: 3.5 })
@@ -336,13 +172,13 @@ function SimulationTab({ user, savedSymbols }) {
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="section-title" style={{ marginBottom: 10 }}>자산 설정</div>
         {savedSymbols.length === 0 ? (
-          <p className="dim">저장된 종목이 없습니다. 종목관리 탭에서 먼저 가격 데이터를 받아오세요.</p>
+          <p className="dim">저장된 종목이 없습니다. 시뮬레이션 &gt; 종목관리 탭에서 먼저 가격 데이터를 받아오세요.</p>
         ) : (
           <div className="form-row" style={{ gap: 20 }}>
             <div style={boxStyle}>
               <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 14, marginBottom: 10 }}>자산 A — 위험자산 (고정)</div>
               <select value={riskyAsset.code} onChange={pickAsset(setRiskyAsset)} style={{ ...numInputStyle, width: '100%' }}>
-                <option value="">종목 선택...</option>
+                <option value="">종목...</option>
                 {savedSymbols.map(s => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
               </select>
               {riskySym && <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>보유 구간: {riskySym.minDate} ~ {riskySym.maxDate}</p>}
@@ -357,7 +193,7 @@ function SimulationTab({ user, savedSymbols }) {
               {safeAsset.mode === 'ticker' && (
                 <>
                   <select value={safeAsset.code} onChange={pickAsset(setSafeAsset)} style={{ ...numInputStyle, width: '100%', marginBottom: 8 }}>
-                    <option value="">종목 선택...</option>
+                    <option value="">종목...</option>
                     {savedSymbols.map(s => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
                   </select>
                   {safeSym && <p className="dim" style={{ fontSize: 12, marginTop: -4, marginBottom: 8 }}>보유 구간: {safeSym.minDate} ~ {safeSym.maxDate}</p>}
@@ -431,7 +267,7 @@ function SimulationTab({ user, savedSymbols }) {
             <LineChart data={simResult.chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={d => d.slice(0, 7)} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => v.toFixed(1) + 'x'} width={45} />
+              <YAxis scale="log" domain={['auto', 'auto']} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => v.toFixed(1) + 'x'} width={45} />
               <Tooltip contentStyle={{ background: '#1e293b', border: 'none', borderRadius: 8 }} formatter={v => v.toFixed(3) + 'x'} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Line type="monotone" dataKey={simResult.riskyLabel} stroke="#ef4444" strokeWidth={1.2} dot={false} />
@@ -439,7 +275,9 @@ function SimulationTab({ user, savedSymbols }) {
               <Line type="monotone" dataKey="리밸런싱" stroke="#3b82f6" strokeWidth={2} dot={<RebalanceDot />} />
             </LineChart>
           </ResponsiveContainer>
-          <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>노란 점 = 밴드를 벗어나 리밸런싱이 실행된 시점</p>
+          <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>
+            <span style={{ color: '#22c55e' }}>● 초록</span> = {simResult.riskyLabel} 매수 리밸런싱, <span style={{ color: '#ef4444' }}>● 빨강</span> = {simResult.riskyLabel} 매도 리밸런싱
+          </p>
         </div>
       )}
     </>

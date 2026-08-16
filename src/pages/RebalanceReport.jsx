@@ -80,15 +80,13 @@ export default function RebalanceReport() {
   const loanTotal = loans.reduce((s, l) => s + (l.amount || 0), 0)
 
   return (
-    <div className="page">
-      <div className="page-heading-row">
-        <h2 className="page-heading">리밸런싱 리포트</h2>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div className="toggle-group">
+          <button className={`toggle-btn${tab === 'shannon' ? ' active' : ''}`} onClick={() => setTab('shannon')}>셰넌 기준</button>
+          <button className={`toggle-btn${tab === 'kelly' ? ' active' : ''}`} onClick={() => setTab('kelly')}>켈리 기준</button>
+        </div>
         <span className="page-heading-sub">{latest.date} 기준</span>
-      </div>
-
-      <div className="toggle-group" style={{ marginBottom: 12 }}>
-        <button className={`toggle-btn${tab === 'shannon' ? ' active' : ''}`} onClick={() => setTab('shannon')}>셰넌 기준</button>
-        <button className={`toggle-btn${tab === 'kelly' ? ' active' : ''}`} onClick={() => setTab('kelly')}>켈리 기준</button>
       </div>
 
       {tab === 'kelly'
@@ -438,7 +436,7 @@ function ShannonPool({ poolLabel, holdings, cashTotal, sectors, settings, onSett
             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={d => d.slice(5)} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => v.toFixed(1) + 'x'} width={45} />
+              <YAxis scale="log" domain={['auto', 'auto']} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => v.toFixed(1) + 'x'} width={45} />
               <Tooltip
                 contentStyle={{ background: '#1e293b', border: 'none', borderRadius: 8 }}
                 formatter={v => v.toFixed(3) + 'x'}

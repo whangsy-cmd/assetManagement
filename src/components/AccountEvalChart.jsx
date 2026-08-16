@@ -60,14 +60,17 @@ function AccountEvalTooltip({ active, payload, label }) {
 
 // 계좌별평가(accountEval) 테이블 rows를 계좌 유형(카테고리)별 스택 영역 차트로 표시.
 // categoryOf(accountId)를 넘기면 유형별로 합산, 안 넘기면 계좌별로 그대로 표시.
-export default function AccountEvalChart({ rows, startDate, categoryOf, title = '총자산 변동 추이 (유형별)', height = 260 }) {
+export default function AccountEvalChart({ rows, startDate, categoryOf, title = '총자산 변동 추이 (유형별)', titleExtra, height = 260 }) {
   const { data, groups } = buildChartData(rows, startDate, categoryOf)
   if (!data.length) return null
 
   return (
     <div className="card" style={{ padding: 16 }}>
       <div className="section-header">
-        <h3 className="section-title">{title}</h3>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <h3 className="section-title">{title}</h3>
+          {titleExtra}
+        </div>
         <div className="legend">
           {groups.map((g, i) => (
             <span key={g} className="legend-item">

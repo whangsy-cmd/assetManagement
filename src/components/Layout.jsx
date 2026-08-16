@@ -6,11 +6,11 @@ import '../common.css'
 
 const NAV = [
   { to: '/',         label: '대시보드' },
+  { to: '/performance', label: '성과분석' },
   { to: '/input',    label: '데이터 입력' },
   { to: '/dataview', label: '데이터 조회' },
   { to: '/datamanage', label: '데이터 관리' },
-  { to: '/rebalance', label: '리밸런싱' },
-  { to: '/shannon-sim', label: '셰넌 시뮬레이션' },
+  { to: '/simulation', label: '시뮬레이션' },
   { to: '/income',   label: '이자·배당·세금' },
   { to: '/schema',   label: 'DB 구조' },
   { to: '/kiwoom-test', label: '키움 테스트' },

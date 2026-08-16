@@ -4,7 +4,7 @@ import '../../common.css'
 
 export function fmt(n) {
   if (n === undefined || n === null) return '-'
-  return Number(n).toLocaleString()
+  return Math.round(Number(n)).toLocaleString()
 }
 
 // ── 날짜 검색 드롭다운 ──────────────────────────────────────

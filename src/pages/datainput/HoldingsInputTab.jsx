@@ -144,8 +144,8 @@ function AccountEvalManualCard({ accounts }) {
       </div>
       <div className="form-row">
         <select value={accountId} onChange={e => setAccountId(e.target.value)} className="select input-sm">
-          <option value="">계좌 선택</option>
-          {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} ({a.accountId})</option>)}
+          <option value="">계좌</option>
+          {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.accountId}</option>)}
         </select>
         <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input input-sm" />
         <input className="input input-sm" style={{ width: 150 }} placeholder="종목평가금액" value={evalAmt} onChange={e => setEvalAmt(e.target.value)} />
@@ -544,7 +544,7 @@ export default function HoldingsInputTab() {
           {parsed && !awaitingCodes && (
             <div style={{ marginTop: 16 }}>
               <p className="section-label">파싱 결과 — {parsed.length}건</p>
-              <div className="table-wrap">
+              <div className="table-wrap table-wrap-scroll">
                 <table className="data-table">
                   <thead>
                     <tr>{Object.keys(parsed[0]).map(k => <th key={k}>{k}</th>)}</tr>
@@ -570,7 +570,7 @@ export default function HoldingsInputTab() {
 
 const styles = {
   steps: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 },
-  stepItem: { background: '#1e293b', color: '#64748b', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer', border: '1px solid transparent' },
+  stepItem: { background: '#1e293b', color: '#94a3b8', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer', border: '1px solid #334155' },
   stepActive: { background: '#1d4ed8', color: '#fff', border: '1px solid #3b82f6' },
   stepDone: { background: '#14532d', color: '#86efac', border: '1px solid #22c55e' },
   stepLabel: { color: '#f1f5f9', fontSize: 16, fontWeight: 600, marginBottom: 20 },

@@ -158,6 +158,16 @@ export async function getKiwoomKeys(uid) {
   return snap.exists() ? snap.data() : null
 }
 
+// ── 공공데이터포털 API 키 저장/조회 (특일 정보 조회 등에 사용) ──
+export async function savePublicDataApiKey(uid, serviceKey) {
+  await setDoc(doc(db, 'users', uid, 'settings', 'publicDataApiKey'), { serviceKey }, { merge: true })
+}
+
+export async function getPublicDataApiKey(uid) {
+  const snap = await getDoc(doc(db, 'users', uid, 'settings', 'publicDataApiKey'))
+  return snap.exists() ? snap.data().serviceKey : null
+}
+
 // ── 리밸런싱 리포트 기본값 저장/조회 ────────────────────────
 export async function getRebalanceSettings(uid) {
   const snap = await getDoc(doc(db, 'users', uid, 'settings', 'rebalance'))
@@ -230,21 +240,19 @@ export async function getAllTransactions(uid) {
   return snap.docs.map(d => ({ docId: d.id, ...d.data() })).sort((a, b) => b.date.localeCompare(a.date))
 }
 
-// ── 특정 날짜 전체 삭제 ─────────────────────────────────────
-export async function deleteDateData(uid, colName, date) {
-  const snap = await getDocs(collection(db, 'users', uid, colName))
-  const targets = snap.docs.filter(d => d.data().date === date)
-  for (let i = 0; i < targets.length; i += 500) {
+// ── docId 목록 일괄 삭제 (화면에 걸린 필터를 전부 반영해 호출부에서 대상 docId를 넘김) ──
+export async function deleteDocumentsByIds(uid, colName, docIds) {
+  for (let i = 0; i < docIds.length; i += 500) {
     const batch = writeBatch(db)
-    targets.slice(i, i + 500).forEach(d => batch.delete(d.ref))
+    docIds.slice(i, i + 500).forEach(id => batch.delete(doc(db, 'users', uid, colName, id)))
     await batch.commit()
   }
 }
 
-// ── 특정 계좌 전체 삭제 ─────────────────────────────────────
-export async function deleteAccountData(uid, colName, accountId) {
+// ── 특정 날짜 전체 삭제 ─────────────────────────────────────
+export async function deleteDateData(uid, colName, date) {
   const snap = await getDocs(collection(db, 'users', uid, colName))
-  const targets = snap.docs.filter(d => d.data().accountId === accountId)
+  const targets = snap.docs.filter(d => d.data().date === date)
   for (let i = 0; i < targets.length; i += 500) {
     const batch = writeBatch(db)
     targets.slice(i, i + 500).forEach(d => batch.delete(d.ref))

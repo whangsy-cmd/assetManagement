@@ -4,14 +4,14 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
+import PerformanceAnalysis from './pages/PerformanceAnalysis'
 import DataInput from './pages/DataInput'
 import DataView from './pages/DataView'
 import DataManage from './pages/DataManage'
 import SchemaView from './pages/SchemaView'
 import KiwoomTest from './pages/KiwoomTest'
 import IncomeReport from './pages/IncomeReport'
-import RebalanceReport from './pages/RebalanceReport'
-import ShannonSimulation from './pages/ShannonSimulation'
+import Simulation from './pages/Simulation'
 
 function PrivateRoutes() {
   const { user } = useAuth()
@@ -30,14 +30,14 @@ function PrivateRoutes() {
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/performance" element={<PerformanceAnalysis />} />
         <Route path="/input" element={<DataInput />} />
         <Route path="/dataview" element={<DataView />} />
         <Route path="/datamanage" element={<DataManage />} />
         <Route path="/schema" element={<SchemaView />} />
         <Route path="/kiwoom-test" element={<KiwoomTest />} />
         <Route path="/income" element={<IncomeReport />} />
-        <Route path="/rebalance" element={<RebalanceReport />} />
-        <Route path="/shannon-sim" element={<ShannonSimulation />} />
+        <Route path="/simulation" element={<Simulation />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

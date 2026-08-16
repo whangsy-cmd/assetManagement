@@ -124,6 +124,28 @@ export default function AccountEvalTab() {
 
   return (
     <div>
+      <div className="toolbar">
+        <div className="date-row">
+          <span className="tool-label">계좌</span>
+          <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)} className="select input-sm" style={{ maxWidth: 260 }}>
+            <option value="전체">전체</option>
+            {accountIds.map(id => <option key={id} value={id}>{id}</option>)}
+          </select>
+        </div>
+        <div className="date-row">
+          <span className="tool-label">날짜</span>
+          <select value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="select input-sm" style={{ maxWidth: 260 }}>
+            <option value="전체">전체</option>
+            {dates.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+        <div className="tool-right">
+          <button className="btn btn-outline-green btn-sm" onClick={handleExport}>
+            데이터 엑셀 다운로드
+          </button>
+        </div>
+      </div>
+
       <div className="summary-bar" style={{ marginBottom: 12 }}>
         <div className="summary-item">
           <span className="summary-label">최초 잔액</span>
@@ -135,7 +157,7 @@ export default function AccountEvalTab() {
         </div>
         <div className="summary-divider" />
         <div className="summary-item">
-          <span className="summary-label">순증감</span>
+          <span className="summary-label">증감</span>
           <span className={`summary-item-val ${cls(netChange)}`} style={{ fontSize: 15 }}>{fmt(Math.round(netChange))}</span>
         </div>
         <div className="summary-item">
@@ -158,28 +180,6 @@ export default function AccountEvalTab() {
         <div className="summary-item">
           <span className="summary-label">세금</span>
           <span className="summary-item-val" style={{ fontSize: 15 }}>{fmt(Math.round(taxTotal))}</span>
-        </div>
-      </div>
-
-      <div className="toolbar">
-        <div className="date-row">
-          <span className="tool-label">계좌 선택</span>
-          <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)} className="select input-sm" style={{ maxWidth: 260 }}>
-            <option value="전체">전체</option>
-            {accountIds.map(id => <option key={id} value={id}>{id}</option>)}
-          </select>
-        </div>
-        <div className="date-row">
-          <span className="tool-label">날짜 선택</span>
-          <select value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="select input-sm" style={{ maxWidth: 260 }}>
-            <option value="전체">전체</option>
-            {dates.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
-        </div>
-        <div className="tool-right">
-          <button className="btn btn-outline-green btn-sm" onClick={handleExport}>
-            데이터 엑셀 다운로드
-          </button>
         </div>
       </div>
 

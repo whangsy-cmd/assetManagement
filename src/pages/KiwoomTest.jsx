@@ -20,6 +20,13 @@ export default function KiwoomTest() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(JSON.stringify(result, null, 2))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
 
   const [flowFrom, setFlowFrom] = useState(monthAgo)
   const [flowTo, setFlowTo] = useState(today)
@@ -142,7 +149,15 @@ export default function KiwoomTest() {
       <div className="card">
         <h4 className="section-label">커스텀 요청</h4>
         <div style={{ ...styles.btnRow, marginBottom: 8 }}>
-          <select value={rawKind} onChange={e => setRawKind(e.target.value)} className="select input-sm">
+          <select
+            value={rawKind}
+            onChange={e => {
+              const kind = e.target.value
+              setRawKind(kind)
+              setRawPath(kind === 'kr' ? '/api/dostk/acnt' : '/api/us/acnt')
+            }}
+            className="select input-sm"
+          >
             <option value="kr">국내</option>
             <option value="us">해외</option>
           </select>
@@ -165,7 +180,10 @@ export default function KiwoomTest() {
 
       {result !== null && (
         <div className="card">
-          <h4 className="section-label">응답 ({Array.isArray(result) ? `${result.length}건` : '객체'})</h4>
+          <div className="section-header">
+            <h4 className="section-label">응답 ({Array.isArray(result) ? `${result.length}건` : '객체'})</h4>
+            <button className="btn btn-outline btn-sm" onClick={handleCopy}>{copied ? '복사됨' : '클립보드 복사'}</button>
+          </div>
           <pre style={styles.pre}>{JSON.stringify(result, null, 2)}</pre>
         </div>
       )}

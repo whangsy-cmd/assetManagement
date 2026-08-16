@@ -17,10 +17,12 @@ dist-ssr
 .env.local
 kiwoom_key/
 .firebase/
+serviceAccountKey.json
 
 # Personal files
 *.xlsx
 src - 복사본/
+data/
 
 # Tool cache
 src/pages/graphify-out/

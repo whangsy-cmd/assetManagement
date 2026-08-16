@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAccounts } from '../../hooks/useAccounts'
 import { getAllAccountEval } from '../../utils/firestore'
-import { LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, sumCategoryValues } from '../../utils/holdingsAgg'
+import { LOAN_ACCOUNT_ID, buildDailySummary } from '../../utils/holdingsAgg'
 import { fmt } from './shared'
 
 // ── 계좌통합 조회 탭 (계좌별평가를 일자별로 합산) ───────────────
@@ -32,33 +32,7 @@ export default function SnapshotsTab() {
   const evalRows = accountEval.filter(r => r.accountId !== LOAN_ACCOUNT_ID)
   const loanRows = accountEval.filter(r => r.accountId === LOAN_ACCOUNT_ID)
 
-  const rowsByAccount = buildRowsByAccount(evalRows)
-
-  const loanByDate = new Map(loanRows.map(r => [r.date, -(r.totalAmt || 0)]))
-  const loanDates = [...loanByDate.keys()].sort()
-  const loanAsOf = date => {
-    let v = 0
-    for (const d of loanDates) { if (d > date) break; v = loanByDate.get(d) }
-    return v
-  }
-
-  const evalDates = [...new Set(evalRows.map(r => r.date))].sort()
-  const summary = evalDates.map(date => {
-    const s = categorySumsAsOf(rowsByAccount, date, accCatMap)
-    const totalBalance = sumCategoryValues(s)
-    const totalLoan = loanAsOf(date)
-    return { date, domestic: s.domestic, overseas: s.overseas, pension: s.pension, futures: s.futures || 0, totalBalance, totalLoan, netBalance: totalBalance - totalLoan }
-  })
-  for (let i = 0; i < summary.length; i++) {
-    const prev = i > 0 ? summary[i - 1] : null
-    summary[i].domesticChange = prev ? summary[i].domestic - prev.domestic : 0
-    summary[i].overseasChange = prev ? summary[i].overseas - prev.overseas : 0
-    summary[i].pensionChange = prev ? summary[i].pension - prev.pension : 0
-    summary[i].futuresChange = prev ? summary[i].futures - prev.futures : 0
-    summary[i].totalChange = prev ? summary[i].totalBalance - prev.totalBalance : 0
-    summary[i].totalChangeRate = prev && prev.totalBalance ? (summary[i].totalChange / prev.totalBalance) * 100 : 0
-  }
-
+  const summary = buildDailySummary(evalRows, loanRows, accCatMap)
   const sorted = [...summary].sort((a, b) => b.date.localeCompare(a.date))
 
   const handleExport = () => {

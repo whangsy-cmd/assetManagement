@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth'
 import { auth, provider } from '../firebase'
 import { setKiwoomAuthUid } from '../utils/kiwoomApi'
+import { setKrHolidayAuthUid } from '../utils/krHolidays'
 
 const AuthContext = createContext(null)
 
@@ -13,6 +14,7 @@ export function AuthProvider({ children }) {
     const unsub = onAuthStateChanged(auth, u => {
       setUser(u)
       setKiwoomAuthUid(u?.uid ?? null)
+      setKrHolidayAuthUid(u?.uid ?? null)
     })
     return unsub
   }, [])

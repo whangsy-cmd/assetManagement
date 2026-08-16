@@ -3,16 +3,16 @@ import { Fragment, useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
 import { useAccounts } from '../hooks/useAccounts'
-import { getLatestHoldings, getAllAccountEval, getSectors, getRebalanceSettings, getLoans, getAllRealizedProfits } from '../utils/firestore'
-import { getAccountCategory, LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, sumCategoryValues, latestCashByAccount } from '../utils/holdingsAgg'
+import { getLatestHoldings, getAllAccountEval, getSectors, getRebalanceSettings, getLoans, getAllRealizedProfits, getAllTransactions } from '../utils/firestore'
+import { getAccountCategory, LOAN_ACCOUNT_ID, buildRowsByAccount, categorySumsAsOf, sumCategoryValues, latestCashByAccount, buildDailySummary } from '../utils/holdingsAgg'
+import { buildTransferEvents, buildCashFlowSummary } from '../utils/finance'
+import { getUsdKrwRate } from '../utils/exchangeRate'
 import AccountEvalChart from '../components/AccountEvalChart'
 import { fmt, sgn, pc } from '../utils/format'
+import { CATEGORY_LABEL, CATEGORY_ORDER, ASSET_BASELINE_DATE } from '../constants'
 import '../common.css'
 
 const COLORS = ['#2f6fed', '#0ea5b7', '#e0b94f', '#e2703a', '#8b6cf0', '#38b28a', '#c65a8a', '#4fa8dc', '#d97b3f', '#7c8ba1']
-const CAT_LABEL = { pension: '연금', domestic: '국내', overseas: '해외', futures: '선물옵션' }
-const DASHBOARD_START_DATE = '2025-02-07' // 그래프/수익률/자산순증 등 전체 계산 시작 기준일
-const BASELINE_AMOUNT = 476884822 // 자산순증/순증가률 계산 기준액 (2025-02-07 순자산)
 
 function fmtWon(n) {
   if (!n && n !== 0) return '-'
@@ -36,7 +36,6 @@ function makePieLabel(denom) {
 }
 
 // 카테고리 표시 순서 — 등록된 카테고리 중 알려진 것만 우선 정렬, 나머지는 이름순 뒤에 붙임
-const CATEGORY_ORDER = ['overseas', 'domestic', 'pension', 'futures']
 function sortCategories(cats) {
   return [...cats].sort((a, b) => {
     const ai = CATEGORY_ORDER.indexOf(a), bi = CATEGORY_ORDER.indexOf(b)
@@ -104,15 +103,15 @@ function AggregateTable({ rows, categories }) {
         <thead>
           <tr>
             <th rowSpan={2}>기간</th>
-            {categories.map(c => <th key={c} className="th-group sep" colSpan={2}>{CAT_LABEL[c] || c}</th>)}
+            {categories.map(c => <th key={c} className="th-group sep" colSpan={2}>{CATEGORY_LABEL[c] || c}</th>)}
             <th className="th-group sep" colSpan={2}>합계</th>
             <th className="r sep" rowSpan={2}>수익률</th>
           </tr>
           <tr>
             {categories.map(c => (
-              <Fragment key={c}><th className="r sep">잔액</th><th className="r">실현손익</th></Fragment>
+              <Fragment key={c}><th className="r sep">잔액</th><th className="r">실현손익(원)</th></Fragment>
             ))}
-            <th className="r sep">잔액</th><th className="r">실현손익</th>
+            <th className="r sep">잔액</th><th className="r">실현손익(원)</th>
           </tr>
         </thead>
         <tbody>
@@ -158,6 +157,8 @@ export default function Dashboard() {
   const [loans, setLoans] = useState([])
   const [sectors, setSectors] = useState([])
   const [rebalanceSettings, setRebalanceSettings] = useState({})
+  const [transactions, setTransactions] = useState([])
+  const [usdRate, setUsdRate] = useState(null)
   const [loading, setLoading] = useState(true)
   const [aggMode, setAggMode] = useState('month')
 
@@ -170,13 +171,17 @@ export default function Dashboard() {
       getRebalanceSettings(user.uid),
       getLoans(user.uid),
       getAllRealizedProfits(user.uid),
-    ]).then(([h, ae, sec, st, ln, rp]) => {
+      getAllTransactions(user.uid),
+    ]).then(([h, ae, sec, st, ln, rp, tx]) => {
       setHoldings(h); setAccountEval(ae); setSectors(sec)
       setRebalanceSettings(st || {})
       setLoans(ln)
       setRealizedProfits(rp)
+      setTransactions(tx)
       setLoading(false)
     })
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    getUsdKrwRate(today).then(setUsdRate).catch(() => setUsdRate(null))
   }, [user])
 
   if (loading) return <div className="loading">로딩 중...</div>
@@ -191,7 +196,8 @@ export default function Dashboard() {
 
   // 전 기간 데이터 시작점 고정 — 그래프/수익률/누적수익 등 모든 계산이 이 날짜부터
   // 대출금(LOAN_ACCOUNT_ID)은 가상 계좌라 자산 집계에서 제외 — 순자산 계산은 아래에서 loans 컬렉션으로 별도 처리
-  const evalRows = accountEval.filter(r => r.date >= DASHBOARD_START_DATE && r.accountId !== LOAN_ACCOUNT_ID)
+  const evalRows = accountEval.filter(r => r.date >= ASSET_BASELINE_DATE && r.accountId !== LOAN_ACCOUNT_ID)
+  const loanEvalRows = accountEval.filter(r => r.date >= ASSET_BASELINE_DATE && r.accountId === LOAN_ACCOUNT_ID)
 
   // 계좌별평가(accountEval)를 날짜별로 묶고, 계좌별로도 날짜 오름차순 정렬
   const rowsByDate = new Map()
@@ -244,7 +250,7 @@ export default function Dashboard() {
   const sectorData = Object.entries(sectorAgg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
   const categoryData = [
     ...Object.entries(latestSums).map(([cat, value]) => ({
-      name: CAT_LABEL[cat] || cat,
+      name: CATEGORY_LABEL[cat] || cat,
       value: cat === 'domestic' ? value - (latest.totalLoan || 0) : value,
     })),
     ...(latest.totalLoan > 0 ? [{ name: '대출금', value: latest.totalLoan }] : []),
@@ -312,15 +318,15 @@ export default function Dashboard() {
     { purchaseAmt: 0, evalAmt: 0, gainLoss: 0, cashAmt: 0, totalAmt: 0 }
   )
 
-  // 자산순증 (2025-02-07 476,884,822원 고정 기준 ~ 최신 날짜)
-  const first = { date: DASHBOARD_START_DATE, totalBalance: BASELINE_AMOUNT }
-  const cumulativeGain = (latest.totalBalance ?? 0) - (first.totalBalance ?? 0)
-  const cumulativeRate = (first.totalBalance ?? 0) > 0 ? (cumulativeGain / first.totalBalance) * 100 : 0
-  const months = Math.max(1,
-    (new Date(latest.date).getFullYear() - new Date(first.date).getFullYear()) * 12 +
-    (new Date(latest.date).getMonth()    - new Date(first.date).getMonth())
-  )
-  const monthlyAvgRate = cumulativeRate / months
+  // 자산순증 — 계좌통합 조회(일자별 순자산 집계)의 첫 기록과 마지막 기록 차액
+  const dailySummary = buildDailySummary(evalRows, loanEvalRows, accCatMap)
+  const first = dailySummary[0] || { date: ASSET_BASELINE_DATE, netBalance: 0 }
+  const cumulativeGain = (dailySummary.at(-1)?.netBalance ?? 0) - (first.netBalance ?? 0)
+  const cumulativeRate = (first.netBalance ?? 0) > 0 ? (cumulativeGain / first.netBalance) * 100 : 0
+
+  // 순입출금액 — 자산순증과 같은 기간(첫 기록 ~ 마지막 기록)의 순수 입출금(이체)만 집계
+  const transferEvents = buildTransferEvents(transactions, usdRate)
+  const cashFlow = buildCashFlowSummary(transactions, transferEvents, first.date, dailySummary.at(-1)?.date, usdRate)
 
   // 종목별 비중 (코드별 합산 → 섹터별 그룹)
   const totalBal = totalBalance || 1
@@ -402,8 +408,8 @@ export default function Dashboard() {
 
         {[
           { label: '자산순증',   val: `${sgn(cumulativeGain)}${fmt(cumulativeGain)}원`, color: pc(cumulativeGain), sub: `${first.date} ~` },
-          { label: '순증가률', val: `${sgn(cumulativeRate)}${cumulativeRate.toFixed(2)}%`, color: pc(cumulativeRate), sub: `기준 ${fmt(first.totalBalance)}원` },
-          { label: '월평균수익', val: `${sgn(monthlyAvgRate)}${monthlyAvgRate.toFixed(2)}%`, color: pc(monthlyAvgRate), sub: `${months}개월` },
+          { label: '순증가률', val: `${sgn(cumulativeRate)}${cumulativeRate.toFixed(2)}%`, color: pc(cumulativeRate), sub: `기준 ${fmt(first.netBalance)}원` },
+          { label: '순입출금액', val: `${sgn(cashFlow.netTransfer)}${fmt(cashFlow.netTransfer)}원`, color: pc(cashFlow.netTransfer), sub: '입금액 − 출금액' },
         ].map(({ label, val, color, sub }) => (
           <div key={label} className="summary-item">
             <span className="summary-label">{label}</span>
@@ -449,7 +455,7 @@ export default function Dashboard() {
       </div>
 
       {/* 총자산 변동 차트 (계좌별평가 기준) */}
-      <AccountEvalChart rows={evalRows} categoryOf={id => CAT_LABEL[getAccountCategory(id, accCatMap)] || getAccountCategory(id, accCatMap)} />
+      <AccountEvalChart rows={evalRows} categoryOf={id => CATEGORY_LABEL[getAccountCategory(id, accCatMap)] || getAccountCategory(id, accCatMap)} />
 
       {/* 비중 차트 */}
       <div className="card-row">
@@ -578,7 +584,7 @@ export default function Dashboard() {
                 {accountRows.map((r, i) => (
                   <tr key={i}>
                     <td>{accNameMap[r.accountId] || r.accountId}</td>
-                    <td><span className={`badge badge-${r.category}`}>{CAT_LABEL[r.category] || r.category}</span></td>
+                    <td><span className={`badge badge-${r.category}`}>{CATEGORY_LABEL[r.category] || r.category}</span></td>
                     <td className="r">{r.purchaseAmt > 0 ? fmtWon(r.purchaseAmt) : '-'}</td>
                     <td className="r">{fmtWon(r.evalAmt)}</td>
                     <td className={`r bold ${r.purchaseAmt > 0 ? pc(r.gainLoss) : 'muted'}`}>{r.purchaseAmt > 0 ? `${sgn(r.gainLoss)}${fmtWon(r.gainLoss)}` : '-'}</td>
