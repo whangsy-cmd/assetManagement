@@ -12,7 +12,7 @@ import { fmt, sgn, pc } from '../utils/format'
 import { CATEGORY_LABEL, CATEGORY_ORDER, ASSET_BASELINE_DATE } from '../constants'
 import '../common.css'
 
-const COLORS = ['#2f6fed', '#0ea5b7', '#e0b94f', '#e2703a', '#8b6cf0', '#38b28a', '#c65a8a', '#4fa8dc', '#d97b3f', '#7c8ba1']
+const COLORS = ['#2f71ed', '#0ea5b7', '#e0b94f', '#e2703a', '#8b6cf0', '#38b28a', '#c65a8a', '#4fa8dc', '#d97b3f', '#7c8ba1']
 
 function fmtWon(n) {
   if (!n && n !== 0) return '-'

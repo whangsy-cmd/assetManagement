@@ -67,6 +67,134 @@ const CRUD_ROWS = [
   { group: '기타', name: '키움 테스트', crud: {} },
 ]
 
+// 데이터입력 화면 항목 ↔ DB 컬럼 매핑 — 코드(DataInput.jsx 하위 탭) 감사 기준 수기 정리.
+const INPUT_MAPPING = [
+  {
+    tab: '계좌평가', card: '계좌평가 수기 등록 (AccountEvalManualCard)',
+    rows: [
+      { label: '계좌', db: 'accountEval.accountId' },
+      { label: '날짜', db: 'accountEval.date' },
+      { label: '종목평가금액', db: 'accountEval.evalAmt' },
+      { label: '예수금', db: 'accountEval.cashAmt' },
+      { label: '총평가금액', db: 'accountEval.totalAmt', calc: 'evalAmt + cashAmt' },
+    ],
+  },
+  {
+    tab: '계좌평가', card: '브로커 붙여넣기 · API조회 — 보유종목/예수금 (6단계 스텝)',
+    rows: [
+      { label: '기준 날짜(공통)', db: 'holdings.date' },
+      { label: '계좌', db: 'holdings.accountId' },
+      { label: '종목코드', db: 'holdings.code', api: 'KR: stk_cd(선두 A 제거) · US: stk_cd' },
+      { label: '종목명', db: 'holdings.name', api: 'KR: stk_nm · US: frgn_stk_nm' },
+      { label: '수량', db: 'holdings.qty', api: 'KR: rmnd_qty · US: poss_qty' },
+      { label: '매입금액', db: 'holdings.purchaseAmt', api: 'KR: pur_amt · US: frgn_stk_book_amt_krw' },
+      { label: '평가금액', db: 'holdings.evalAmt', api: 'KR: evlt_amt · US: evlt_amt_krw' },
+      { label: '손익', db: 'holdings.gainLoss', api: 'KR: evltv_prft · US: pl_amt_krw' },
+      { label: '수익률', db: 'holdings.returnRate', api: 'KR: prft_rt · US: pl_rt' },
+      { label: '브로커', db: 'holdings.broker' },
+      { label: '(자동집계) 종목평가금액', db: 'accountEval.evalAmt', calc: '같은 date+accountId의 holdings.evalAmt 합계' },
+      { label: '(자동집계) 예수금', db: 'accountEval.cashAmt', api: 'KR: 100stk_ord_alow_amt · US: d2_won_conv_alow_ch', calc: '같은 date+accountId 예수금액(붙여넣기/API 값, 중간값 — 별도 컬렉션에 저장 안 됨) 합계' },
+      { label: '(자동집계) 합계', db: 'accountEval.totalAmt', calc: 'evalAmt + cashAmt' },
+      { label: '(자동집계) 대출금 가상계좌', db: 'accountEval.cashAmt/totalAmt (accountId=대출금 가상계좌ID)', calc: '-Σ loans.amount, evalAmt는 항상 0' },
+    ],
+    note: '미래에셋은 API 없음(붙여넣기 전용). accountEval 4행은 화면 입력칸이 따로 없고, "저장 + 계좌별평가 등록" 클릭 시 holdings·예수금·loans로부터 자동 계산되어 holdings와 별개로 저장됨.',
+  },
+  {
+    tab: '거래내역', card: '브로커 거래내역 붙여넣기 · API조회 (PasteTxCard)',
+    rows: [
+      { label: '계좌(선택/고정)', db: 'transactions.accountId' },
+      { label: '날짜', db: 'transactions.date', api: 'KR: cntr_dt(체결일, 없으면 trde_dt)' },
+      { label: '거래종류', db: 'transactions.type', api: 'KR: rmrk_nm' },
+      { label: '종목명', db: 'transactions.name', api: 'KR: stk_nm' },
+      { label: '종목코드', db: 'transactions.code', api: 'KR: stk_cd(선두 A 제거)' },
+      { label: '통화', db: 'transactions.currency', api: 'KR: crnc_cd' },
+      { label: '수량', db: 'transactions.qty', api: 'KR: trde_qty_jwa_cnt' },
+      { label: '단가', db: 'transactions.price', api: 'KR: trde_unit' },
+      { label: '거래금액', db: 'transactions.amount', api: 'KR: trde_amt' },
+      { label: '수수료', db: 'transactions.fee', api: 'KR: cmsn' },
+      { label: '세금', db: 'transactions.tax', api: 'KR: trde_agri_tax + incm_resi_tax' },
+      { label: '청산손익', db: 'transactions.profit', calc: '선물옵션 등 결제행에 손익이 찍히는 포맷만 값 존재 (붙여넣기 파서 자체 계산)' },
+      { label: '(파생) 실현손익 원화환산', db: 'realizedProfits.realizedProfit', calc: 'transactions.profit이 있을 때만: Math.trunc(currency===USD ? profit × 당일 환율 : profit)' },
+      { label: '(파생) 실현손익 수수료', db: 'realizedProfits.fee', calc: 'Math.trunc(currency===USD ? transactions.fee × 당일 환율 : transactions.fee)' },
+    ],
+    note: 'API 자동조회는 키움국내만 지원 — 키움해외/미래에셋/선물옵션(국내·해외)은 붙여넣기 전용. realizedProfits 파생 등록은 저장(등록) 버튼 클릭 시 handleSave에서 함께 처리',
+  },
+  {
+    tab: '거래내역', card: '이체입금/출금 등록 (TransferEntryCard)',
+    rows: [
+      { label: '계좌', db: 'transactions.accountId' },
+      { label: '날짜', db: 'transactions.date' },
+      { label: '종류', db: 'transactions.type' },
+      { label: '통화', db: 'transactions.currency' },
+      { label: '금액', db: 'transactions.amount' },
+    ],
+  },
+  {
+    tab: '실현손익', card: '계좌·포맷별 붙여넣기 · API조회 (RealizedProfitCard)',
+    rows: [
+      { label: '계좌(선택/고정)', db: 'realizedProfits.accountId' },
+      { label: '일자', db: 'realizedProfits.date', api: 'KR: dt(영업일보정) · US: sell_dt(영업일보정)' },
+      { label: '종목코드', db: 'realizedProfits.code', api: 'KR: stk_cd · US: stk_cd' },
+      { label: '종목명', db: 'realizedProfits.name', api: 'KR: stk_nm · US: frgn_stk_nm' },
+      { label: '수량', db: 'realizedProfits.qty', api: 'KR: cntr_qty · US: sell_qty' },
+      { label: '거래금액', db: 'realizedProfits.sellAmount', api: 'KR: cntr_pric × cntr_qty · US: sell_amt' },
+      { label: '청산손익', db: 'realizedProfits.liquidationProfit', api: 'US: pl_amt (KR은 필드 없음)' },
+      { label: '수수료', db: 'realizedProfits.fee', api: 'KR: tdy_trde_cmsn · US: cmsn_tax(세금 합산)' },
+      { label: '세금', db: 'realizedProfits.tax', api: 'KR: tdy_trde_tax (US는 수수료에 합산돼 별도 없음)' },
+      { label: '적용환율', db: 'realizedProfits.exrt', api: 'US: sell_exrt (KR은 원화 그대로라 없음)' },
+      { label: '실현손익(원)', db: 'realizedProfits.realizedProfit', api: 'KR: tdy_sel_pl · US: pl_amt × sell_exrt(반올림)' },
+    ],
+    note: 'API 자동조회는 키움국내/키움해외만 지원 — 미래에셋/옵션계좌손익(국내·해외)은 붙여넣기 전용',
+  },
+  {
+    tab: '실현손익', card: '직접 입력 — 정해진 포맷 없는 계좌 (ManualEntryCard)',
+    rows: [
+      { label: '계좌', db: 'realizedProfits.accountId' },
+      { label: '일자', db: 'realizedProfits.date' },
+      { label: '실현손익', db: 'realizedProfits.realizedProfit' },
+    ],
+    note: '0 입력 시 등록 대신 해당 일자/계좌 문서 삭제',
+  },
+]
+
+function InputFieldMapping() {
+  return (
+    <div className="card">
+      <h4 className="section-label">데이터입력 항목 ↔ DB 컬럼 매핑</h4>
+      {INPUT_MAPPING.map((section, i) => (
+        <div key={i} style={{ marginBottom: 16 }}>
+          <p className="text-muted" style={{ margin: '10px 0 6px', fontSize: 13 }}>
+            [{section.tab}] {section.card}
+          </p>
+          <div className="table-wrap">
+            <table className="data-table compact">
+              <thead>
+                <tr>
+                  <th>화면 입력 항목</th>
+                  <th>DB 컬럼 (컬렉션.필드)</th>
+                  <th>API 응답 필드 (자동조회 시)</th>
+                  <th>계산식 (1:1 아닌 경우)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {section.rows.map(r => (
+                  <tr key={r.label}>
+                    <td>{r.label}</td>
+                    <td><code className="code-chip">{r.db}</code></td>
+                    <td>{r.api ? <code className="code-chip">{r.api}</code> : <span className="text-muted">-</span>}</td>
+                    <td>{r.calc ? <span>{r.calc}</span> : <span className="text-muted">-</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {section.note && <p className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>※ {section.note}</p>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function CrudMatrix() {
   return (
     <div className="card">
@@ -208,6 +336,7 @@ export default function SchemaView() {
       <h2 className="page-heading">DB 구조 조회</h2>
       <p className="text-muted" style={{ margin: '8px 0 20px' }}>컬렉션별 필드 구조와 샘플 데이터입니다. 클릭해서 펼쳐보세요.</p>
       <CrudMatrix />
+      <InputFieldMapping />
       {COLLECTIONS.map(c => <CollectionCard key={c} name={c} />)}
     </div>
   )

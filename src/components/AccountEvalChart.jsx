@@ -2,7 +2,7 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import '../common.css'
 
-const CHART_COLORS = ['#e2703a', '#0ea5b7', '#e0b94f', '#2f6fed', '#8b6cf0', '#38b28a', '#c65a8a', '#4fa8dc', '#d97b3f', '#7c8ba1']
+const CHART_COLORS = ['#e2703a', '#0ea5b7', '#e0b94f', '#2f71ed', '#8b6cf0', '#38b28a', '#c65a8a', '#4fa8dc', '#d97b3f', '#7c8ba1']
 
 // 스택 순서 (아래→위): 선물옵션 → 연금 등 나머지 → 국내 → 해외
 const CATEGORY_RANK = { '선물옵션': 0, '연금': 1, '국내': 2, '해외': 3 }

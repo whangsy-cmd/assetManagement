@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
 import { useAccounts } from '../hooks/useAccounts'
-import { getSavedSymbols, getPriceSeries } from '../utils/priceData'
+import { getSavedSymbols, getPriceSeries, downloadMissingRange } from '../utils/priceData'
 import { getAllAccountEval, getAllTransactions } from '../utils/firestore'
 import { getUsdKrwRate } from '../utils/exchangeRate'
 import { LOAN_ACCOUNT_ID, buildDailySummary } from '../utils/holdingsAgg'
@@ -96,6 +96,7 @@ export default function StockComparison() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [stockPrices, setStockPrices] = useState(null)
+  const [priceLoading, setPriceLoading] = useState(false)
   const [usdRate, setUsdRate] = useState(null)
 
   useEffect(() => {
@@ -130,10 +131,19 @@ export default function StockComparison() {
 
   const symbol = savedSymbols.find(s => s.code === selectedCode)
 
+  // 종목/기간 선택 시 캐시에 없는 구간을 키움에서 자동으로 받아온 뒤 가격 데이터 표시
   useEffect(() => {
-    if (!user || !selectedCode) { setStockPrices(null); return }
-    getPriceSeries(user.uid, selectedCode).then(series => setStockPrices(series?.prices || null))
-  }, [user, selectedCode])
+    if (!user || !selectedCode || !dateFrom || !dateTo) { setStockPrices(null); return }
+    let cancelled = false
+    setPriceLoading(true)
+    downloadMissingRange(user.uid, selectedCode, selectedName, dateFrom, dateTo)
+      .catch(() => {}) // 키움 미지원 종목 등은 무시하고 기존 캐시만 표시
+      .then(() => getPriceSeries(user.uid, selectedCode))
+      .then(series => { if (!cancelled) setStockPrices(series?.prices || null) })
+      .finally(() => { if (!cancelled) setPriceLoading(false) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedCode, dateFrom, dateTo])
 
   // 종목 선택이 바뀌면 종목 데이터와 총자산 데이터가 겹치는 구간으로 기간 초기값 설정
   useEffect(() => {
@@ -163,7 +173,7 @@ export default function StockComparison() {
   return (
     <div>
       {!savedSymbols.length ? (
-        <p className="dim">저장된 종목이 없습니다. 시뮬레이션 &gt; 종목관리 탭에서 먼저 가격 데이터를 받아오세요.</p>
+        <p className="dim">저장된 종목이 없습니다. 데이터 관리 &gt; 종목관리 탭에서 먼저 가격 데이터를 받아오세요.</p>
       ) : !netIndexByDate.size ? (
         <p className="dim">저장된 계좌별평가 데이터가 없습니다.</p>
       ) : (
@@ -188,6 +198,8 @@ export default function StockComparison() {
 
           {!selectedCode ? (
             <p className="dim">종목을 선택하세요.</p>
+          ) : priceLoading ? (
+            <p className="dim">키움에서 가격 데이터 가져오는 중...</p>
           ) : !result ? (
             <p className="text-error">선택한 기간에 겹치는 데이터가 없습니다.</p>
           ) : (

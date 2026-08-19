@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import {
   fetchKrHoldings, fetchKrCash, fetchUsLedger, fetchUsCashDetail,
-  fetchKrCashFlows, fetchKrDailyChart, fetchUsDailyChart, kiwoomCall,
+  fetchKrCashFlows, fetchKrDailyChart, fetchUsDailyChart, fetchKrDailyQuote, fetchUsDailyQuote, kiwoomCall,
 } from '../utils/kiwoomApi'
 import '../common.css'
 
@@ -35,6 +35,9 @@ export default function KiwoomTest() {
   const [chartCode, setChartCode] = useState('')
   const [chartFrom, setChartFrom] = useState(monthAgo)
   const [chartTo, setChartTo] = useState(today)
+
+  const [quoteMarket, setQuoteMarket] = useState('kr')
+  const [quoteCode, setQuoteCode] = useState('')
 
   const [rawKind, setRawKind] = useState('kr')
   const [rawPath, setRawPath] = useState('/api/dostk/acnt')
@@ -142,6 +145,33 @@ export default function KiwoomTest() {
             }}
           >
             {loading === '차트' ? '호출 중...' : '조회'}
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h4 className="section-label">종목시세 (ka10086 / usa20590)</h4>
+        <div style={styles.btnRow}>
+          <select value={quoteMarket} onChange={e => setQuoteMarket(e.target.value)} className="select input-sm">
+            <option value="kr">국내</option>
+            <option value="us">해외</option>
+          </select>
+          <input placeholder="종목코드" value={quoteCode} onChange={e => setQuoteCode(e.target.value)} className="input input-sm" />
+          <button
+            className="btn btn-outline-blue btn-sm"
+            disabled={!!loading || !quoteCode}
+            onClick={() => {
+              const toDt = today.replace(/-/g, '')
+              const isKr = quoteMarket === 'kr'
+              const path = isKr ? '/api/dostk/mrkcond' : '/api/us/mrkcond'
+              const apiId = isKr ? 'ka10086' : 'usa20590'
+              const body = isKr
+                ? { stk_cd: quoteCode, qry_dt: toDt, indc_tp: '1' }
+                : { stex_tp: 'ND', stk_cd: quoteCode, base_dt: toDt } // 해외는 ND→NY→NA 순 재시도, 여기엔 첫 시도값만 표시
+              runWithRequest('종목시세', quoteMarket, path, apiId, body, () => (isKr ? fetchKrDailyQuote : fetchUsDailyQuote)(quoteCode, monthAgo, today))
+            }}
+          >
+            {loading === '종목시세' ? '호출 중...' : '조회'}
           </button>
         </div>
       </div>

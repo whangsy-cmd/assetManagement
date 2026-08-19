@@ -1,10 +1,10 @@
 // 종목 과거 일별 시세 캐시(priceSeries) 조회/다운로드/CSV 입출력 (셰넌 시뮬레이션용)
 import { doc, getDoc, getDocs, setDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
-import { fetchKrDailyChart, fetchUsDailyChart } from './kiwoomApi'
+import { fetchKrDailyQuote, fetchUsDailyQuote } from './kiwoomApi'
 
 // KRX 코드는 항상 6자리(숫자만이 아니라 워런트/ELW 등은 문자 포함, 예: 0018C0)
-const isKoreanCode = (code) => /^[0-9A-Za-z]{6}$/.test(code)
+export const isKoreanCode = (code) => /^[0-9A-Za-z]{6}$/.test(code)
 
 export function addDays(iso, n) {
   const d = new Date(iso + 'T00:00:00Z')
@@ -13,7 +13,7 @@ export function addDays(iso, n) {
 }
 
 export function fetchDailyPrices(code, fromISO, toISO) {
-  return isKoreanCode(code) ? fetchKrDailyChart(code, fromISO, toISO) : fetchUsDailyChart(code, fromISO, toISO)
+  return isKoreanCode(code) ? fetchKrDailyQuote(code, fromISO, toISO) : fetchUsDailyQuote(code, fromISO, toISO)
 }
 
 // ── Firestore: 저장된 종목 목록 ─────────────────────────────
@@ -44,19 +44,32 @@ export async function downloadMissingRange(uid, code, name, fromISO, toISO) {
   const snap = await getDoc(ref)
   const existing = snap.exists() ? snap.data() : null
 
+  // opens/highs/lows가 없거나(OHLC 추가 전 구버전 캐시) 음수값이 섞여있으면(등락기호가 값에 붙어와 파싱되던 구버전 버그)
+  // 캔들차트 표시를 위해 기존 캐시 구간도 포함해서 통째로 다시 받아와 덮어씀
+  const noNegatives = (m) => Object.values(m || {}).every(v => v >= 0)
+  const hasOhlc = !!(existing?.opens && Object.keys(existing.opens).length)
+    && noNegatives(existing.opens) && noNegatives(existing.highs) && noNegatives(existing.lows)
+
   const ranges = []
   if (!existing) {
     ranges.push([fromISO, toISO])
+  } else if (!hasOhlc) {
+    ranges.push([fromISO < existing.minDate ? fromISO : existing.minDate, toISO > existing.maxDate ? toISO : existing.maxDate])
   } else {
     if (fromISO < existing.minDate) ranges.push([fromISO, addDays(existing.minDate, -1)])
     if (toISO > existing.maxDate) ranges.push([addDays(existing.maxDate, 1), toISO])
   }
 
-  const newPrices = {}
+  const newPrices = {}, newOpens = {}, newHighs = {}, newLows = {}
   for (const [f, t] of ranges) {
     if (f > t) continue
     const rows = await fetchDailyPrices(code, f, t)
-    for (const r of rows) newPrices[r.date] = r.close
+    for (const r of rows) {
+      newPrices[r.date] = r.close
+      if (r.open != null) newOpens[r.date] = r.open
+      if (r.high != null) newHighs[r.date] = r.high
+      if (r.low != null) newLows[r.date] = r.low
+    }
   }
 
   if (!ranges.length || !Object.keys(newPrices).length) {
@@ -64,6 +77,9 @@ export async function downloadMissingRange(uid, code, name, fromISO, toISO) {
   }
 
   const merged = { ...(existing?.prices || {}), ...newPrices }
+  const mergedOpens = { ...(existing?.opens || {}), ...newOpens }
+  const mergedHighs = { ...(existing?.highs || {}), ...newHighs }
+  const mergedLows = { ...(existing?.lows || {}), ...newLows }
   const dates = Object.keys(merged).sort()
   const minDate = dates[0]
   const maxDate = dates.at(-1)
@@ -75,6 +91,9 @@ export async function downloadMissingRange(uid, code, name, fromISO, toISO) {
     minDate,
     maxDate,
     prices: merged,
+    opens: mergedOpens,
+    highs: mergedHighs,
+    lows: mergedLows,
     updatedAt: serverTimestamp(),
   })
 

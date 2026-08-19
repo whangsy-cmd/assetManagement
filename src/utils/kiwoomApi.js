@@ -111,6 +111,27 @@ export async function kiwoomCall(kind, apiId, body, path = '/api/dostk/acnt') {
 export const fetchKrHoldings = () => kiwoomCall('kr', 'kt00018', { qry_tp: '0', dmst_stex_tp: 'KRX' })
 export const fetchKrCash     = () => kiwoomCall('kr', 'kt00001', { qry_tp: '0', dmst_stex_tp: 'KRX' })
 
+// 국내 종목 기본정보(ka10001) — 미등록 종목코드 자동등록 시 종목명 조회용
+export async function fetchKrStockInfo(code) {
+  const data = await kiwoomCall('kr', 'ka10001', { stk_cd: code }, '/api/dostk/stkinfo')
+  if (data.return_code !== undefined && data.return_code !== 0) throw new Error(`[${data.return_code}] ${data.return_msg || '조회 실패'}`)
+  return { code: str(data.stk_cd) || code, name: str(data.stk_nm) }
+}
+
+// 미국 종목 조회(usa10100) — 미등록 종목코드 자동등록 시 종목명 조회용. 거래소구분(ND/NY/NA) 순차 시도
+export async function fetchUsStockInfo(code) {
+  let lastErr
+  for (const stex of ['ND', 'NY', 'NA']) {
+    try {
+      const data = await kiwoomCall('us', 'usa10100', { stex_tp: stex, stk_cd: code }, '/api/us/stkinfo')
+      if (data.return_code !== undefined && data.return_code !== 0) throw new Error(`[${data.return_code}] ${data.return_msg || '조회 실패'}`)
+      const name = str(data.stk_nm) || str(data.stk_enm)
+      if (name) return { code: str(data.stk_cd) || code, name }
+    } catch (e) { lastErr = e }
+  }
+  throw lastErr || new Error(`${code}: 해당 종목의 정보를 찾을 수 없습니다.`)
+}
+
 export const fetchUsLedger = () => kiwoomCall('us', 'ust21070', { stex_tp: '', stk_cd: '' }, '/api/us/acnt')
 
 export const fetchUsCashDetail = () => kiwoomCall('us', 'ust21160', {}, '/api/us/acnt')
@@ -279,6 +300,8 @@ export async function transformUsRealizedProfit(raw) {
 
 // ── 응답 → 앱 데이터 변환 ───────────────────────────────────────
 function num(v) { return Number(String(v ?? 0).replace(/[,\s]/g, '')) || 0 }
+// 시가/고가/저가/종가 필드는 전일대비 등락기호(+/-)가 값에 그대로 섞여와 음수로 파싱되는 경우가 있음 — 가격은 항상 0 이상이므로 절대값 처리
+function priceNum(v) { return Math.abs(num(v)) }
 function str(v) { return String(v ?? '').trim() }
 const toIso = (yyyymmdd) => `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`
 
@@ -336,7 +359,7 @@ export async function fetchKrDailyChart(code, fromISO, toISO) {
     'dt', fromDt
   )
   return rows
-    .map(r => ({ date: toIso(r.dt), close: num(r.cur_prc) }))
+    .map(r => ({ date: toIso(r.dt), close: priceNum(r.cur_prc) }))
     .filter(r => r.date >= fromISO && r.date <= toISO)
     .sort((a, b) => a.date.localeCompare(b.date))
 }
@@ -354,7 +377,43 @@ export async function fetchUsDailyChart(code, fromISO, toISO) {
       )
       if (rows.length) {
         return rows
-          .map(r => ({ date: toIso(r.dt), close: num(r.cur_prc) }))
+          .map(r => ({ date: toIso(r.dt), close: priceNum(r.cur_prc) }))
+          .filter(r => r.date >= fromISO && r.date <= toISO)
+          .sort((a, b) => a.date.localeCompare(b.date))
+      }
+    } catch (e) { lastErr = e }
+  }
+  throw lastErr || new Error(`${code}: 해당 종목의 데이터를 찾을 수 없습니다.`)
+}
+
+// 국내 종목 일별주가 OHLC (ka10086) — qry_dt부터 과거로 페이징
+export async function fetchKrDailyQuote(code, fromISO, toISO) {
+  const fromDt = fromISO.replace(/-/g, ''), toDt = toISO.replace(/-/g, '')
+  const rows = await kiwoomChartCall(
+    'kr', 'ka10086', '/api/dostk/mrkcond',
+    { stk_cd: code, qry_dt: toDt, indc_tp: '1' },
+    'date', fromDt
+  )
+  return rows
+    .map(r => ({ date: toIso(r.date), open: priceNum(r.open_pric), high: priceNum(r.high_pric), low: priceNum(r.low_pric), close: priceNum(r.close_pric) }))
+    .filter(r => r.date >= fromISO && r.date <= toISO)
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+// 미국 종목 일별주가 OHLC (usa20590) — base_dt부터 과거로 페이징, 거래소구분(ND/NY/NA) 순차 시도
+export async function fetchUsDailyQuote(code, fromISO, toISO) {
+  const fromDt = fromISO.replace(/-/g, ''), toDt = toISO.replace(/-/g, '')
+  let lastErr
+  for (const stex of ['ND', 'NY', 'NA']) {
+    try {
+      const rows = await kiwoomChartCall(
+        'us', 'usa20590', '/api/us/mrkcond',
+        { stex_tp: stex, stk_cd: code, base_dt: toDt },
+        'dt', fromDt
+      )
+      if (rows.length) {
+        return rows
+          .map(r => ({ date: toIso(r.dt), open: priceNum(r.open_pric), high: priceNum(r.high_pric), low: priceNum(r.low_pric), close: priceNum(r.cur_prc) }))
           .filter(r => r.date >= fromISO && r.date <= toISO)
           .sort((a, b) => a.date.localeCompare(b.date))
       }
